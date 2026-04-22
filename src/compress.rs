@@ -41,7 +41,7 @@ pub fn compress(
 
     // 3+4. Select legend entries + collect chosen positions (O(N) NFA scan)
     let (legend, chosen_positions) =
-        legend::select_legend_with_positions(&working, max_legend_entries, max_ngram);
+        legend::select_legend_with_positions(&working, max_legend_entries, max_ngram, 0);
 
     // 5. Direct substitution from known positions — no second AhoCorasick scan
     let body_after_legend =

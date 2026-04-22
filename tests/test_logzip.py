@@ -98,3 +98,105 @@ def test_max_ngram_param():
     result1 = compress(log, max_ngram=1)
     result2 = compress(log, max_ngram=5)
     assert len(result2.legend) >= len(result1.legend)
+
+
+def test_tag_offset_no_collision():
+    """Pass 2 tags must not collide with pass 1 tags."""
+    from logzip import compress
+    log = "\n".join([
+        f"INFO database connection established host=db.internal port=5432 latency={i % 5}ms"
+        for i in range(200)
+    ] + [
+        f"ERROR database connection failed host=db.internal port=5432 attempt={i % 5}"
+        for i in range(200)
+    ])
+    result = compress(log, bpe_passes=2)
+    tags = [tag for tag, _ in result.legend]
+    assert len(tags) == len(set(tags)), "Tags must be unique across all passes"
+
+
+def test_bpe_passes_round_trip():
+    """compress(bpe_passes=2) → decompress must return exact original."""
+    from logzip import compress, decompress
+    log = "\n".join([
+        f"INFO database connection established host=db.internal port=5432 latency={i % 5}ms"
+        for i in range(200)
+    ] + [
+        f"ERROR database connection failed host=db.internal port=5432 attempt={i % 5}"
+        for i in range(200)
+    ])
+    result = compress(log, bpe_passes=2, do_normalize=False, do_templates=False)
+    rendered = result.render()
+    restored = decompress(rendered)
+    assert restored == log
+
+
+def test_bpe_passes_used_stat():
+    """bpe_passes_used stat reflects actual passes run."""
+    from logzip import compress
+    log = "\n".join([
+        f"INFO db connection established host=db.internal port=5432 latency={i % 5}ms"
+        for i in range(300)
+    ])
+    result = compress(log, bpe_passes=2)
+    stats = result.stats()
+    assert "bpe_passes_used" in stats
+    assert stats["bpe_passes_used"] >= 1
+
+
+def test_bpe_passes_1_regression():
+    """bpe_passes=1 (default) produces identical output to old behaviour."""
+    from logzip import compress
+    log = "\n".join([
+        f"2026-04-21T14:32:{i:02d}.000Z INFO request received GET /api/users"
+        for i in range(50)
+    ])
+    r1 = compress(log, bpe_passes=1)
+    r2 = compress(log)
+    assert r1.render() == r2.render()
+
+
+def test_decompress_cyclic_raises():
+    """Malformed legend with cyclic dependency raises ValueError."""
+    import pytest
+    from logzip import decompress
+    malformed = (
+        "--- LEGEND ---\n"
+        "#0# = prefix #1# suffix\n"
+        "#1# = start #0# end\n"
+        "--- BODY ---\n"
+        "#0#\n"
+    )
+    with pytest.raises(ValueError, match="cyclic"):
+        decompress(malformed)
+
+
+def test_round_trip_bpe2_large():
+    """Round-trip with bpe_passes=2 on a larger structured log."""
+    from logzip import compress, decompress
+    log = "\n".join([
+        f"2026-04-21T14:32:{i:02d}.123456789Z INFO connection established host=db.internal port=5432"
+        for i in range(100)
+    ] + [
+        f"2026-04-21T14:32:{i:02d}.123456789Z ERROR connection failed host=db.internal port=5432"
+        for i in range(100)
+    ])
+    result = compress(log, bpe_passes=2, do_normalize=False, do_templates=False)
+    restored = decompress(result.render())
+    assert restored == log
+
+
+def test_cli_quality_max_stat():
+    """CLI with --quality max runs without error."""
+    import subprocess
+    import sys
+    log = "\n".join([
+        f"INFO db connection established host=db.internal port=5432 latency={i % 5}ms"
+        for i in range(300)
+    ])
+    result = subprocess.run(
+        [sys.executable, "-m", "logzip", "compress", "--quality", "max", "--stats"],
+        input=log, capture_output=True, text=True
+    )
+    assert result.returncode == 0
+    assert "--- BODY ---" in result.stdout

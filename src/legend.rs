@@ -92,6 +92,7 @@ pub fn select_legend_with_positions(
     text: &str,
     max_entries: usize,
     max_ngram: usize,
+    tag_offset: usize,
 ) -> (Vec<LegendEntry>, Vec<Vec<usize>>) {
     // 1. Count
     let counter = count_candidates(text, max_ngram, 5);
@@ -159,7 +160,7 @@ pub fn select_legend_with_positions(
             continue;
         }
 
-        let tag = base62::encode(legend.len() as u64);
+        let tag = base62::encode((tag_offset + legend.len()) as u64);
         let p = profit_score(val_len, free.len(), tag.len());
         if p <= 0 {
             continue;
@@ -189,7 +190,7 @@ pub fn select_legend(
     _min_profit: i64,
     max_ngram: usize,
 ) -> Vec<LegendEntry> {
-    select_legend_with_positions(text, max_entries, max_ngram).0
+    select_legend_with_positions(text, max_entries, max_ngram, 0).0
 }
 
 // ─── Применение — прямая замена по известным позициям ────────────────────────
