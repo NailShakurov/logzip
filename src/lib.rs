@@ -131,6 +131,7 @@ impl From<CompressResult> for PyCompressResult {
     do_normalize = true,
     profile = None,
     do_templates = true,
+    bpe_passes = 1,
 ))]
 fn compress_log(
     text: String,
@@ -139,6 +140,7 @@ fn compress_log(
     do_normalize: bool,
     profile: Option<String>,
     do_templates: bool,
+    bpe_passes: usize,
 ) -> PyResult<PyCompressResult> {
     let result = core_compress(
         &text,
@@ -147,6 +149,7 @@ fn compress_log(
         do_normalize,
         profile.as_deref(),
         do_templates,
+        bpe_passes,
     );
     Ok(PyCompressResult::from(result))
 }

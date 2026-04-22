@@ -19,6 +19,7 @@ pub fn compress(
     do_normalize: bool,
     profile: Option<&str>,
     do_templates: bool,
+    bpe_passes: usize,
 ) -> CompressResult {
     let original_len = text.len();
 
@@ -44,22 +45,49 @@ pub fn compress(
         legend::select_legend_with_positions(&working, max_legend_entries, max_ngram, 0);
 
     // 5. Direct substitution from known positions — no second AhoCorasick scan
-    let body_after_legend =
+    let mut body_working =
         legend::apply_legend_from_positions(&working, &legend, &chosen_positions);
+    let mut all_legend = legend;
+    let mut passes_used = 1usize;
 
+    // 5b. Meta-passes (recursive BPE)
+    for _ in 1..bpe_passes {
+        if body_working.len() <= 256 {
+            break;
+        }
+        let tag_offset = all_legend.len();
+        let (meta_legend, meta_positions) = legend::select_legend_with_positions(
+            &body_working,
+            max_legend_entries,
+            max_ngram,
+            tag_offset,
+        );
+        if meta_legend.is_empty() {
+            break;
+        }
+        let meta_body =
+            legend::apply_legend_from_positions(&body_working, &meta_legend, &meta_positions);
+        // Guard: skip if savings < 5%
+        if meta_body.len() * 20 > body_working.len() * 19 {
+            break;
+        }
+        all_legend.extend(meta_legend);
+        body_working = meta_body;
+        passes_used += 1;
+    }
 
     // 6. Templates
     let (body, tmpl_list) = if do_templates {
-        let lines: Vec<&str> = body_after_legend.lines().collect();
+        let lines: Vec<&str> = body_working.lines().collect();
         let (new_lines, tmpls) = templates::extract_templates(&lines);
         (new_lines.join("\n"), tmpls)
     } else {
-        (body_after_legend, vec![])
+        (body_working, vec![])
     };
 
     // Stats
     let compressed_len = body.len()
-        + legend
+        + all_legend
             .iter()
             .map(|e| format!("#{tag}# = {val}\n", tag = e.tag, val = e.value).len())
             .sum::<usize>()
@@ -75,13 +103,14 @@ pub fn compress(
     stats.insert("original_chars".to_string(), original_len.to_string());
     stats.insert("compressed_chars".to_string(), compressed_len.to_string());
     stats.insert("ratio_pct".to_string(), format!("{ratio:.1}"));
-    stats.insert("legend_entries".to_string(), legend.len().to_string());
+    stats.insert("legend_entries".to_string(), all_legend.len().to_string());
     stats.insert("template_entries".to_string(), tmpl_list.len().to_string());
     stats.insert("profile".to_string(), detected_profile.clone());
+    stats.insert("bpe_passes_used".to_string(), passes_used.to_string());
 
     CompressResult {
         body,
-        legend,
+        legend: all_legend,
         templates: tmpl_list,
         common_prefix,
         detected_profile,
