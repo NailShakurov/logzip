@@ -34,13 +34,16 @@ def main() -> None:
 
     if args.cmd == "compress":
         quality_map = {
-            "fast": 32,
-            "balanced": 128,
-            "max": 512,
+            "fast":     (32,  1),
+            "balanced": (128, 1),
+            "max":      (512, 2),
         }
-        max_legend_entries = quality_map[args.quality]
 
         raw = sys.stdin.read() if args.input == "-" else open(args.input).read()
+        max_legend_entries, bpe_passes = quality_map[args.quality]
+        if args.quality == "balanced" and len(raw) > 5_000_000:
+            bpe_passes = 2
+
         result = compress(
             raw,
             max_ngram=args.max_ngram,
@@ -48,6 +51,7 @@ def main() -> None:
             do_normalize=not args.no_normalize,
             profile=args.profile,
             do_templates=not args.no_templates,
+            bpe_passes=bpe_passes,
         )
         output = result.render(with_preamble=args.preamble)
 
