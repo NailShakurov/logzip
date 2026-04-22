@@ -134,7 +134,7 @@ The model instantly spots the 500 error without wading through thousands of iden
 ### Safety First
 - **Pure Rust**: Core logic is 100% Rust.
 - **Zero `unsafe`**: The codebase contains **no unsafe blocks**, ensuring memory safety within the Python runtime.
-- **Audited**: No memory leaks or segment faults during multi-gigabyte log processing.
+- **Stress-tested**: Handled multi-GB logs without memory leaks or crashes.
 
 ## Reproducibility
 
