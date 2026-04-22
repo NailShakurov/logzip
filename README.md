@@ -56,10 +56,12 @@ Benchmarked on a real 7.96 MB production log.
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **fast** | `--quality fast` | ~200 | ~4,900 | ~40% | text/LLM |
 | **balanced** | `--quality balanced` | 404 | 3,928 | 52% | text/LLM |
-| **recursive** ★ | `--quality balanced --bpe-passes 2` | 418 | 3,404 | **58%** | text/LLM |
+| **balanced + 2 passes** ★ | `--quality balanced --bpe-passes 2` | 418 | 3,404 | **58%** | text/LLM |
 | **max** | `--quality max` | 507 | 3,511 | 57% | text/LLM |
 
-★ **recursive** (`balanced` + 2 BPE passes) beats `max` in both size and speed — recommended for production.
+★ **Recommended.** A second compression pass finds repeated token sequences in already-compressed text — 14 ms overhead, 7% more savings vs `balanced`.
+
+`--quality max` uses a larger legend (512 vs 128 entries) which adds overhead without a second pass benefit. Use `--bpe-passes 2` with `balanced` instead.
 
 ### vs. binary compressors (for context)
 
@@ -68,7 +70,7 @@ Benchmarked on a real 7.96 MB production log.
 | lz4 | 6 | 1,280 | 84% | No |
 | zstd (lvl 3) | 14 | 819 | 90% | No |
 | zlib (lvl 6) | 69 | 840 | 90% | No |
-| **logzip (recursive)** | 418 | 3,404 | 58% | **Yes** |
+| **logzip (recommended)** | 418 | 3,404 | 58% | **Yes** |
 
 Binary compressors produce opaque binary blobs — LLMs cannot read them. logzip trades ~30% size for fully human- and LLM-readable output.
 
@@ -82,7 +84,7 @@ Token estimation: 1 token ≈ 4 characters (rough estimate for English-like logs
 ├──────────────────────────────────────────────────────────┤
 │  Raw Size:        8,151 KB  (~1,990,000 tokens)          │
 │  After balanced:  3,928 KB  (~959,000 tokens,  -52%)     │
-│  After recursive: 3,404 KB  (~831,000 tokens,  -58%)     │
+│  After 2 passes:  3,404 KB  (~831,000 tokens,  -58%)     │
 ├──────────────────────────────────────────────────────────┤
 │  Cost Before:     $5.97                                  │
 │  Cost After:      $2.49      (Claude 3.5 Sonnet Input)   │
@@ -107,8 +109,8 @@ logzip compress < app.log
 # quality preset (fast|balanced|max)
 logzip compress --quality balanced < app.log
 
-# explicit BPE passes (overrides --quality default)
-logzip compress --quality balanced --bpe-passes 3 < app.log
+# recommended: balanced + second pass
+logzip compress --quality balanced --bpe-passes 2 < app.log
 
 # with preamble (LLM decode instructions at the top)
 logzip compress --preamble < app.log > compressed.txt
@@ -137,7 +139,7 @@ print(result.stats_str())                  # → for logs
 result = compress(
     raw_log_text,
     max_legend_entries=128,   # legend size
-    bpe_passes=2,             # recursive BPE passes (1–3)
+    bpe_passes=2,             # second-pass compression (compresses repeated token sequences)
     do_normalize=True,        # collapse timestamps, ANSI, IPs
     do_templates=True,        # structural template extraction
 )
@@ -148,7 +150,7 @@ original = decompress(result.render())
 
 ## Through the eyes of an LLM
 
-Unlike `gzip/zstd` which produce binary noise, `logzip` produces **structured text**. The model can reliably interpret the legend and reconstruct repeated patterns, allowing it to analyze the log directly in compressed form.
+Unlike `gzip/zstd` which produce binary noise, `logzip` produces **structured text**. The model reads the legend once and works with the compressed body directly — it doesn't need to expand every token to understand the log.
 
 **Input for LLM:**
 > This is a compressed log. Rules: `#0#` is replaced by `GET /api/v1/status`.
@@ -161,11 +163,13 @@ The model instantly spots the 500 error without wading through thousands of iden
 
 ## Architecture & Safety
 
+Pipeline: **normalize → find patterns → compress → refine → extract templates**
+
 1. **Normalizer**: Collapses ANSI, timestamps, IPs, and common prefixes.
 2. **Frequency Analysis**: Parallel n-gram counting using `rayon`.
 3. **Greedy Legend**: Optimized selection using a positional index (O(N)).
 4. **Direct Replacement**: Fast substitution without re-scanning.
-5. **Recursive BPE**: Second-pass compression on already-compressed text — finds repeated tag sequences for extra savings.
+5. **Second Pass**: Compresses repeated token sequences in the already-compressed body.
 6. **Templates**: Structural template extraction.
 
 ### Safety First
@@ -180,8 +184,11 @@ Want to verify our benchmarks? Run the included script:
 python benchmark.py
 ```
 
-## Roadmap / v2
+## Roadmap
 
+Priority:
+- [ ] Streaming mode for multi-GB logs
+
+Planned:
 - [ ] MCP server for Claude Code
 - [ ] Suffix automaton for arbitrary repetition search
-- [ ] Streaming mode for massive files
