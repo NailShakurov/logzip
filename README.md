@@ -54,7 +54,7 @@ When working with logs in LLMs (Claude, GPT, RAG systems), you face two problems
 | **balanced** | ~0.4s | 50-55% | ~0.9M | 128 | Best for daily use |
 | **max** | ~0.5s | 55-60% | ~0.8M | 512 | Max compression |
 
-*Benchmarked on a real 8MB log (~2.0M tokens). Token estimation: 1 token ≈ 4 characters. Sub-second performance.*
+*Benchmarked on a real 8MB log (~2.0M tokens). Token estimation: 1 token ≈ 4 characters (rough estimate for English-like logs). Sub-second performance.*
 
 ### 💰 Economic Impact
 
