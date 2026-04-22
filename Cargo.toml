@@ -8,7 +8,7 @@ keywords = ["log", "compression", "llm", "rust", "python"]
 categories = ["compression", "command-line-utilities"]
 
 [dependencies]
-pyo3 = { version = "0.22", features = ["extension-module"] }
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"] }
 regex = "1"
 rayon = "1.10"
 aho-corasick = "1"

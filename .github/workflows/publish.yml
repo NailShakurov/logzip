@@ -10,10 +10,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
       - uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist
+          args: --release --out dist --interpreter python3.11
           manylinux: auto
       - uses: actions/upload-artifact@v4
         with:
@@ -24,10 +27,15 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
       - uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist --target universal2-apple-darwin
+          args: --release --out dist --target universal2-apple-darwin --features pyo3/abi3-py39
+        env:
+          PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-macos
