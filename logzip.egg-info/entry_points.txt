@@ -1,0 +1,2 @@
+[console_scripts]
+logzip = logzip.__main__:main

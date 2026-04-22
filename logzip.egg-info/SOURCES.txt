@@ -1,0 +1,16 @@
+README.md
+pyproject.toml
+logzip/__init__.py
+logzip/__main__.py
+logzip/base62.py
+logzip/legend.py
+logzip/normalizer.py
+logzip/profiles.py
+logzip/templates.py
+logzip.egg-info/PKG-INFO
+logzip.egg-info/SOURCES.txt
+logzip.egg-info/dependency_links.txt
+logzip.egg-info/entry_points.txt
+logzip.egg-info/requires.txt
+logzip.egg-info/top_level.txt
+tests/test_logzip.py

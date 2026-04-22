@@ -1,0 +1,31 @@
+[package]
+name = "logzip"
+version = "0.1.0"
+edition = "2021"
+description = "Compress logs for LLM analysis"
+license = "MIT"
+keywords = ["log", "compression", "llm", "rust", "python"]
+categories = ["compression", "command-line-utilities"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+regex = "1"
+rayon = "1.10"
+aho-corasick = "1"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "benches"
+harness = false
+
+[lib]
+name = "_logzip"
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

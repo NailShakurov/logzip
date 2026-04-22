@@ -1,0 +1,19 @@
+# Rust
+target/
+Cargo.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+.pytest_cache/
+venv/
+dist/
+build/
+
+# Project specific
+logzip_py/
+log.log
+compressed.log
