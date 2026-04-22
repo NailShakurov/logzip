@@ -36,7 +36,7 @@ INFO: 127.0.0.1:
 Typical savings: **40–60%** on structured logs (systemd, uvicorn, docker).  
 Anomalies and unique lines stay uncompressed — visible at a glance in the BODY.
 
-### 🚀 Why use logzip? (RAG & LLM)
+### Why use logzip? (RAG & LLM)
 
 When working with logs in LLMs (Claude, GPT, RAG systems), you face two problems:
 1. **Context Limit**: Logs are huge. A 10MB log is ~2.5M tokens.
@@ -50,13 +50,13 @@ When working with logs in LLMs (Claude, GPT, RAG systems), you face two problems
 
 | Quality | Time (s) | Savings (%) | Tokens (est.) | Entries | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **fast** | ~0.5s | 35-40% | ~1.2M | 32 | Default, near instant |
+| **fast** | ~0.2s | 35-40% | ~1.2M | 32 | Default, near instant |
 | **balanced** | ~0.4s | 50-55% | ~0.9M | 128 | Best for daily use |
 | **max** | ~0.5s | 55-60% | ~0.8M | 512 | Max compression |
 
 *Benchmarked on a real 8MB log (~2.0M tokens). Token estimation: 1 token ≈ 4 characters (rough estimate for English-like logs). Sub-second performance.*
 
-### 💰 Economic Impact
+### Economic Impact
 
 ```text
 ┌──────────────────────────────────────────────────────────┐
@@ -67,7 +67,7 @@ When working with logs in LLMs (Claude, GPT, RAG systems), you face two problems
 │  Tokens After:      921,600  (55% savings)               │
 ├──────────────────────────────────────────────────────────┤
 │  Cost Before:     $6.14                                  │
-│  Cost After:      $2.76      (at $3/1M tokens)           │
+│  Cost After:      $2.76      (Claude 3.5 Sonnet Input)   │
 │  LLM Efficiency:  2.2x more context for the same price   │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -112,7 +112,7 @@ print(result.stats_str())                  # → for logs
 
 ## Through the eyes of an LLM
 
-Unlike `gzip/zstd` which produce binary noise, `logzip` produces **structured text**. The model understands the legend and can "decompress" the log in its head or analyze it directly in compressed form.
+Unlike `gzip/zstd` which produce binary noise, `logzip` produces **structured text**. The model can reliably interpret the legend and reconstruct repeated patterns, allowing it to analyze the log directly in compressed form.
 
 **Input for LLM:**
 > This is a compressed log. Rules: `#0#` is replaced by `GET /api/v1/status`.
