@@ -56,6 +56,22 @@ When working with logs in LLMs (Claude, GPT, RAG systems), you face two problems
 
 *Benchmarked on a real 8MB log (~2.0M tokens). Token estimation: 1 token ≈ 4 characters. Sub-second performance.*
 
+### 💰 Economic Impact
+
+```text
+┌──────────────────────────────────────────────────────────┐
+│  logzip Savings (8MB Production Log)                     │
+├──────────────────────────────────────────────────────────┤
+│  Raw Size:        8,192 KB                               │
+│  Tokens Before:   2,048,000                              │
+│  Tokens After:      921,600  (55% savings)               │
+├──────────────────────────────────────────────────────────┤
+│  Cost Before:     $6.14                                  │
+│  Cost After:      $2.76      (at $3/1M tokens)           │
+│  LLM Efficiency:  2.2x more context for the same price   │
+└──────────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## Install
