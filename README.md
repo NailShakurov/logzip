@@ -81,3 +81,10 @@ python -m pytest tests/ -v
 - [ ] MCP-сервер для Claude Code
 - [ ] suffix automaton для поиска произвольных повторов
 - [ ] streaming mode для гигантских файлов
+
+
+[![PyPI version](https://img.shields.io/pypi/v/logzip.svg)](https://pypi.org/project/logzip/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/logzip.svg)](https://pypi.org/project/logzip/)
+[![Python 3.9+](https://img.shields.io/pypi/pyversions/logzip.svg)](https://pypi.org/project/logzip/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Rust](https://img.shields.io/badge/powered%20by-Rust-orange.svg)](https://www.rust-lang.org/)
