@@ -6,28 +6,56 @@ Compress logs **before** sending to LLM. Powered by Rust & PyO3.
 raw log → [logzip compress] → compressed text → LLM (Claude Code / Cursor / API)
 ```
 
+### Before / After
+
+**Raw Log (Uvicorn):**
+```text
+INFO: 127.0.0.1:45678 - "GET /api/v1/status HTTP/1.1" 200 OK
+INFO: 127.0.0.1:45679 - "GET /api/v1/status HTTP/1.1" 200 OK
+... (100 similar lines) ...
+```
+
+**logzip output:**
+```text
+--- PREFIX ---
+INFO: 127.0.0.1:
+--- LEGEND ---
+#0# = - "GET /api/v1/status HTTP/1.1" 200 OK
+--- BODY ---
+45678 #0#
+45679 #0#
+...
+```
+
 Typical savings: **40–60%** on structured logs (systemd, uvicorn, docker).  
 Anomalies and unique lines stay uncompressed — visible at a glance in the BODY.
+
+### 🚀 Зачем это нужно (RAG & LLM)
+
+При работе с логами в LLM (Claude, GPT, RAG-системы) вы сталкиваетесь с двумя проблемами:
+1. **Context Limit**: Логи огромны. 10МБ лога — это ~2.5 млн токенов.
+2. **Noise**: 90% лога — это повторяющиеся `INFO` и однотипные запросы, которые мешают модели найти реальную ошибку.
+
+`logzip` идеально ложится в **RAG-пайплайны**: вы сжимаете контекст перед отправкой в модель, экономя деньги на токенах и повышая точность ответов за счет выделения аномалий.
 
 ---
 
 ## Performance (8MB Log)
 
-| Quality  | Time (s) | Savings (%) | Entries | Description                |
-|----------|----------|-------------|---------|----------------------------|
-| **fast** | ~0.5s    | 35-40%      | 32      | Default, near instant      |
-| **balanced**| ~0.4s | 50-55%      | 128     | Best for daily use         |
-| **max**  | ~0.5s    | 55-60%      | 512     | Max compression            |
+| Quality  | Time (s) | Savings (%) | Tokens (est.) | Entries | Description                |
+|----------|----------|-------------|---------------|---------|----------------------------|
+| **fast** | ~0.5s    | 35-40%      | ~1.2M         | 32      | Default, near instant      |
+| **balanced**| ~0.4s | 50-55%      | ~0.9M         | 128     | Best for daily use         |
+| **max**  | ~0.5s    | 55-60%      | ~0.8M         | 512     | Max compression            |
 
-*Benchmarked on a real 8MB RAG system log. Sub-second performance for multi-megabyte files.*
+*Benchmarked on a real 8MB log (~2.0M tokens). Token estimation: 1 token ≈ 4 characters. Sub-second performance.*
 
 ---
 
 ## Install
 
 ```bash
-# Requires Rust toolchain for building from source
-pip install .
+pip install logzip
 ```
 
 ## CLI
@@ -59,6 +87,19 @@ result = compress(raw_log_text, quality="balanced")
 print(result.render(with_preamble=True))   # → в LLM
 print(result.stats_str())                  # → в stderr
 ```
+
+## Глазами LLM
+
+В отличие от `gzip/zstd`, которые выдают бинарный шум, `logzip` выдает **структурированный текст**. Модель понимает легенду и может «распаковать» лог в уме или анализировать его прямо в сжатом виде.
+
+**Вход для LLM:**
+> Это сжатый лог. Правила: `#0#` заменяется на `GET /api/v1/status`.
+>
+> --- BODY ---
+> 12:00:01 #0# 200 OK
+> 12:00:02 #0# 500 ERR <-- Опа, аномалия!
+
+Модель мгновенно видит 500-ю ошибку, не продираясь через тысячи строк одинаковых успешных запросов.
 
 ## Архитектура (Rust)
 
