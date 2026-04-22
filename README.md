@@ -33,7 +33,7 @@ INFO: 127.0.0.1:
 ...
 ```
 
-Typical savings: **40–60%** on structured logs (systemd, uvicorn, docker).  
+Typical savings: **52–58%** on structured logs (systemd, uvicorn, docker).  
 Anomalies and unique lines stay uncompressed — visible at a glance in the BODY.
 
 ### Why use logzip? (RAG & LLM)
@@ -46,29 +46,47 @@ When working with logs in LLMs (Claude, GPT, RAG systems), you face two problems
 
 ---
 
-## Performance (8MB Log, ~2M tokens)
+## Performance (7.96 MB Log, ~2M tokens)
 
-| Quality | Time (s) | Savings (%) | Tokens (est.) | Entries | Description |
+Benchmarked on a real 7.96 MB production log.
+
+### logzip modes
+
+| Mode | CLI | Time (ms) | Size (KB) | Saved (%) | Output type |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **fast** | ~0.2s | 35-40% | ~1.2M | 32 | Default, near instant |
-| **balanced** | ~0.4s | 50-55% | ~0.9M | 128 | Best for daily use |
-| **max** | ~0.5s | 55-60% | ~0.8M | 512 | Max compression |
+| **fast** | `--quality fast` | ~200 | ~4,900 | ~40% | text/LLM |
+| **balanced** | `--quality balanced` | 404 | 3,928 | 52% | text/LLM |
+| **recursive** ★ | `--quality balanced --bpe-passes 2` | 418 | 3,404 | **58%** | text/LLM |
+| **max** | `--quality max` | 507 | 3,511 | 57% | text/LLM |
 
-*Benchmarked on a real 8MB log (~2.0M tokens). Token estimation: 1 token ≈ 4 characters (rough estimate for English-like logs). Sub-second performance.*
+★ **recursive** (`balanced` + 2 BPE passes) beats `max` in both size and speed — recommended for production.
+
+### vs. binary compressors (for context)
+
+| Tool | Time (ms) | Size (KB) | Saved (%) | LLM-readable? |
+| :--- | :--- | :--- | :--- | :--- |
+| lz4 | 6 | 1,280 | 84% | No |
+| zstd (lvl 3) | 14 | 819 | 90% | No |
+| zlib (lvl 6) | 69 | 840 | 90% | No |
+| **logzip (recursive)** | 418 | 3,404 | 58% | **Yes** |
+
+Binary compressors produce opaque binary blobs — LLMs cannot read them. logzip trades ~30% size for fully human- and LLM-readable output.
+
+Token estimation: 1 token ≈ 4 characters (rough estimate for English-like logs).
 
 ### Economic Impact
 
 ```text
 ┌──────────────────────────────────────────────────────────┐
-│  logzip Savings (8MB Production Log)                     │
+│  logzip Savings (7.96 MB Production Log)                 │
 ├──────────────────────────────────────────────────────────┤
-│  Raw Size:        8,192 KB                               │
-│  Tokens Before:   2,048,000                              │
-│  Tokens After:      921,600  (55% savings)               │
+│  Raw Size:        8,151 KB  (~1,990,000 tokens)          │
+│  After balanced:  3,928 KB  (~959,000 tokens,  -52%)     │
+│  After recursive: 3,404 KB  (~831,000 tokens,  -58%)     │
 ├──────────────────────────────────────────────────────────┤
-│  Cost Before:     $6.14                                  │
-│  Cost After:      $2.76      (Claude 3.5 Sonnet Input)   │
-│  LLM Efficiency:  2.2x larger for the same price   │
+│  Cost Before:     $5.97                                  │
+│  Cost After:      $2.49      (Claude 3.5 Sonnet Input)   │
+│  LLM Efficiency:  2.4x larger context for the same price │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -84,12 +102,15 @@ pip install logzip
 
 ```bash
 # stdin → stdout (default mode)
-# macOS (pbcopy) / Linux (xclip) / Windows (clip)      # → buffer → paste to Claude
+logzip compress < app.log
 
-# with quality selection (fast|balanced|max)
+# quality preset (fast|balanced|max)
 logzip compress --quality balanced < app.log
 
-# with preamble (LLM instructions at the beginning)
+# explicit BPE passes (overrides --quality default)
+logzip compress --quality balanced --bpe-passes 3 < app.log
+
+# with preamble (LLM decode instructions at the top)
 logzip compress --preamble < app.log > compressed.txt
 
 # save + show stats
@@ -97,6 +118,9 @@ logzip compress --stats -i app.log -o app.logzip
 
 # explicit profile (otherwise auto-detected)
 logzip compress --profile journalctl < /tmp/syslog.txt
+
+# decompress
+logzip decompress -i app.logzip
 ```
 
 ## Python API
@@ -105,9 +129,21 @@ logzip compress --profile journalctl < /tmp/syslog.txt
 from logzip import compress, decompress
 
 # compress
-result = compress(raw_log_text, quality="balanced")
+result = compress(raw_log_text)
 print(result.render(with_preamble=True))   # → for LLM
 print(result.stats_str())                  # → for logs
+
+# fine-grained control
+result = compress(
+    raw_log_text,
+    max_legend_entries=128,   # legend size
+    bpe_passes=2,             # recursive BPE passes (1–3)
+    do_normalize=True,        # collapse timestamps, ANSI, IPs
+    do_templates=True,        # structural template extraction
+)
+
+# decompress
+original = decompress(result.render())
 ```
 
 ## Through the eyes of an LLM
@@ -129,7 +165,8 @@ The model instantly spots the 500 error without wading through thousands of iden
 2. **Frequency Analysis**: Parallel n-gram counting using `rayon`.
 3. **Greedy Legend**: Optimized selection using a positional index (O(N)).
 4. **Direct Replacement**: Fast substitution without re-scanning.
-5. **Templates**: Structural template extraction.
+5. **Recursive BPE**: Second-pass compression on already-compressed text — finds repeated tag sequences for extra savings.
+6. **Templates**: Structural template extraction.
 
 ### Safety First
 - **Pure Rust**: Core logic is 100% Rust.

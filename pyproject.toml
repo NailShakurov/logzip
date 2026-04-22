@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "logzip"
-version = "0.1.0"
+version = "1.1.0"
 description = "Compress logs for LLM analysis (Rust-powered)"
 readme = "README.md"
 requires-python = ">=3.9"

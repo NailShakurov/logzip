@@ -24,6 +24,7 @@ def main() -> None:
     pc.add_argument("--no-normalize", action="store_true", help="Skip normalization")
     pc.add_argument("--no-templates", action="store_true", help="Skip template extraction")
     pc.add_argument("--quality", choices=["fast", "balanced", "max"], default="fast", help="Compression quality preset (default: fast)")
+    pc.add_argument("--bpe-passes", type=int, default=None, metavar="N", help="BPE passes 1-3 (overrides --quality default)")
     pc.add_argument("--profile", default=None, help="Force profile: journalctl|docker|uvicorn|nodejs|plain")
 
     pd = sub.add_parser("decompress", help="Decompress a logzip file")
@@ -43,6 +44,8 @@ def main() -> None:
         max_legend_entries, bpe_passes = quality_map[args.quality]
         if args.quality == "balanced" and len(raw) > 5_000_000:
             bpe_passes = 2
+        if args.bpe_passes is not None:
+            bpe_passes = args.bpe_passes
 
         result = compress(
             raw,

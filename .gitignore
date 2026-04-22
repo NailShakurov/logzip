@@ -17,4 +17,9 @@ build/
 logzip_py/
 log.log
 compressed.log
+log.compressed.txt
 notes/
+docs/
+.claude/
+CLAUDE.md
+scratch/
