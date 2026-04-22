@@ -42,11 +42,11 @@ When working with logs in LLMs (Claude, GPT, RAG systems), you face two problems
 1. **Context Limit**: Logs are huge. A 10MB log is ~2.5M tokens.
 2. **Noise**: 90% of the log consists of repeating `INFO` and identical requests that drown out the real error.
 
-`logzip` is perfect for **RAG pipelines**: it compresses the context before sending it to the model, saving money on tokens and increasing answer accuracy by highlighting anomalies.
+`logzip` is well-suited for **RAG pipelines**: it compresses the context before sending it to the model, saving money on tokens and increasing answer accuracy by highlighting anomalies.
 
 ---
 
-## Performance (8MB Log)
+## Performance (8MB Log, ~2M tokens)
 
 | Quality | Time (s) | Savings (%) | Tokens (est.) | Entries | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -68,7 +68,7 @@ When working with logs in LLMs (Claude, GPT, RAG systems), you face two problems
 ├──────────────────────────────────────────────────────────┤
 │  Cost Before:     $6.14                                  │
 │  Cost After:      $2.76      (Claude 3.5 Sonnet Input)   │
-│  LLM Efficiency:  2.2x more context for the same price   │
+│  LLM Efficiency:  2.2x larger for the same price   │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -84,7 +84,7 @@ pip install logzip
 
 ```bash
 # stdin → stdout (default mode)
-cat app.log | logzip compress | pbcopy      # → buffer → paste to Claude
+# macOS (pbcopy) / Linux (xclip) / Windows (clip)      # → buffer → paste to Claude
 
 # with quality selection (fast|balanced|max)
 logzip compress --quality balanced < app.log
