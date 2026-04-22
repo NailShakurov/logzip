@@ -157,7 +157,8 @@ fn compress_log(
 /// Decompress rendered logzip output back to plain log.
 #[pyfunction]
 fn decompress_log(rendered: String) -> PyResult<String> {
-    Ok(core_decompress(&rendered))
+    core_decompress(&rendered)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))
 }
 
 /// Python module entry point.

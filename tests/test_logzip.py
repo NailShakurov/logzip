@@ -145,15 +145,18 @@ def test_bpe_passes_used_stat():
 
 
 def test_bpe_passes_1_regression():
-    """bpe_passes=1 (default) produces identical output to old behaviour."""
-    from logzip import compress
+    """bpe_passes=1 (default) decompresses correctly and uses exactly 1 pass."""
+    from logzip import compress, decompress
     log = "\n".join([
         f"2026-04-21T14:32:{i:02d}.000Z INFO request received GET /api/users"
         for i in range(50)
     ])
-    r1 = compress(log, bpe_passes=1)
-    r2 = compress(log)
-    assert r1.render() == r2.render()
+    r1 = compress(log, bpe_passes=1, do_normalize=False, do_templates=False)
+    r2 = compress(log, do_normalize=False, do_templates=False)
+    assert decompress(r1.render()) == log
+    assert decompress(r2.render()) == log
+    assert r1.stats()["bpe_passes_used"] == 1
+    assert r2.stats()["bpe_passes_used"] == 1
 
 
 def test_decompress_cyclic_raises():

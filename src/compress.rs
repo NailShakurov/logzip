@@ -118,6 +118,71 @@ pub fn compress(
     }
 }
 
+// ─── flatten_legend: DFS с мемоизацией ───────────────────────────────────────
+
+use aho_corasick::{AhoCorasick, MatchKind};
+
+fn resolve(
+    tag: &str,
+    raw_map: &HashMap<String, String>,
+    ac: &AhoCorasick,
+    keys: &[String],
+    cache: &mut HashMap<String, String>,
+    depth: usize,
+) -> Result<String, String> {
+    if depth > 10 {
+        return Err(format!("Malformed legend: cyclic dependency at tag {tag}"));
+    }
+    if let Some(cached) = cache.get(tag) {
+        return Ok(cached.clone());
+    }
+    let val = match raw_map.get(tag) {
+        Some(v) => v.clone(),
+        None => return Ok(tag.to_string()),
+    };
+    // Collect matches first — избегаем borrow-конфликта между find_iter и &mut cache
+    let matches: Vec<aho_corasick::Match> = ac.find_iter(&val).collect();
+    let mut result = String::with_capacity(val.len() * 2);
+    let mut last = 0;
+    for m in matches {
+        result.push_str(&val[last..m.start()]);
+        let inner_tag = &keys[m.pattern().as_usize()];
+        result.push_str(&resolve(inner_tag, raw_map, ac, keys, cache, depth + 1)?);
+        last = m.end();
+    }
+    result.push_str(&val[last..]);
+    cache.insert(tag.to_string(), result.clone());
+    Ok(result)
+}
+
+fn flatten_legend(
+    entries: &[legend::LegendEntry],
+) -> Result<(Vec<String>, Vec<String>), String> {
+    if entries.is_empty() {
+        return Ok((vec![], vec![]));
+    }
+    let keys: Vec<String> = entries.iter().map(|e| legend::wrap(&e.tag)).collect();
+    let raw_map: HashMap<String, String> = keys
+        .iter()
+        .zip(entries.iter())
+        .map(|(k, e)| (k.clone(), e.value.clone()))
+        .collect();
+
+    let ac = AhoCorasick::builder()
+        .match_kind(MatchKind::LeftmostLongest)
+        .build(&keys)
+        .expect("flatten AhoCorasick build");
+
+    let mut cache: HashMap<String, String> = HashMap::new();
+    let mut resolved_values: Vec<String> = Vec::with_capacity(entries.len());
+
+    for key in &keys {
+        let v = resolve(key, &raw_map, &ac, &keys, &mut cache, 0)?;
+        resolved_values.push(v);
+    }
+    Ok((keys, resolved_values))
+}
+
 // ─── Section regexes for decompress ──────────────────────────────────────────
 
 use regex::Regex;
@@ -139,7 +204,7 @@ fn tmpl_legend_re() -> &'static Regex {
     TMPL_LEGEND_RE.get_or_init(|| Regex::new(r"^&([0-9a-zA-Z]+)\s*=\s*(.*)$").unwrap())
 }
 
-pub fn decompress(rendered: &str) -> String {
+pub fn decompress(rendered: &str) -> Result<String, String> {
     let mut section = String::new();
     let mut prefix = String::new();
     let mut legend_entries: Vec<legend::LegendEntry> = Vec::new();
@@ -182,9 +247,20 @@ pub fn decompress(rendered: &str) -> String {
     let body_refs: Vec<&str> = body_lines.iter().map(|s| s.as_str()).collect();
     let expanded_lines = templates::reverse_templates(&body_refs, &tmpl_entries);
     let body = expanded_lines.join("\n");
-    let expanded = legend::reverse_legend(&body, &legend_entries);
 
-    if prefix.is_empty() {
+    let (flat_keys, flat_values) = flatten_legend(&legend_entries)?;
+    let expanded = if flat_keys.is_empty() {
+        body
+    } else {
+        let flat_refs: Vec<&str> = flat_values.iter().map(|s| s.as_str()).collect();
+        let ac = AhoCorasick::builder()
+            .match_kind(MatchKind::LeftmostLongest)
+            .build(&flat_keys)
+            .expect("decompress AhoCorasick build");
+        ac.replace_all(&body, &flat_refs)
+    };
+
+    Ok(if prefix.is_empty() {
         expanded
     } else {
         expanded
@@ -192,5 +268,5 @@ pub fn decompress(rendered: &str) -> String {
             .map(|l| format!("{prefix}{l}"))
             .collect::<Vec<_>>()
             .join("\n")
-    }
+    })
 }
