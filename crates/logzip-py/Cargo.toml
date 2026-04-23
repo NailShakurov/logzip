@@ -1,0 +1,14 @@
+[package]
+name = "logzip-py"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Python bindings for logzip"
+
+[lib]
+name = "_logzip"
+crate-type = ["cdylib"]
+
+[dependencies]
+logzip-core = { path = "../logzip-core" }
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"] }
