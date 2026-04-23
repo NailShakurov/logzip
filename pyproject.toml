@@ -25,12 +25,13 @@ classifiers = [
 ]
 
 [project.scripts]
-logzip = "logzip.__main__:main"
+logzip-py = "logzip.__main__:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "maturin>=1.5"]
 
 [tool.maturin]
+manifest-path = "crates/logzip-py/Cargo.toml"
 python-source = "python"
 module-name = "logzip._logzip"
 features = ["pyo3/extension-module"]
