@@ -1,2 +1,2 @@
-// placeholder — будет заполнен в Task 7
+mod sandbox;
 fn main() {}
