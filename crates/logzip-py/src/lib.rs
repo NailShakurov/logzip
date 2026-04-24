@@ -100,6 +100,8 @@ impl From<CompressResult> for PyCompressResult {
     profile = None,
     do_templates = true,
     bpe_passes = 1,
+    preserve_ids = false,
+    preserve_patterns = None,
 ))]
 fn compress_log(
     text: String,
@@ -109,10 +111,20 @@ fn compress_log(
     profile: Option<String>,
     do_templates: bool,
     bpe_passes: usize,
+    preserve_ids: bool,
+    preserve_patterns: Option<Vec<String>>,
 ) -> PyResult<PyCompressResult> {
+    let preserve = if preserve_ids || preserve_patterns.as_ref().map(|v| !v.is_empty()).unwrap_or(false) {
+        Some(logzip_core::PreserveConfig {
+            preserve_ids,
+            extra_patterns: preserve_patterns.unwrap_or_default(),
+        })
+    } else {
+        None
+    };
     let result = core_compress(
         &text, max_ngram, max_legend_entries, do_normalize,
-        profile.as_deref(), do_templates, bpe_passes,
+        profile.as_deref(), do_templates, bpe_passes, preserve.as_ref(),
     );
     Ok(PyCompressResult::from(result))
 }
@@ -128,6 +140,6 @@ fn _logzip(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compress_log, m)?)?;
     m.add_function(wrap_pyfunction!(decompress_log, m)?)?;
     m.add_class::<PyCompressResult>()?;
-    m.add("__version__", "2.1.1")?;
+    m.add("__version__", "2.1.2")?;
     Ok(())
 }

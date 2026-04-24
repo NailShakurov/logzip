@@ -5,4 +5,4 @@ pub mod normalizer;
 pub mod profiles;
 pub mod templates;
 
-pub use compress::{compress, decompress, CompressResult, PREAMBLE};
+pub use compress::{compress, decompress, CompressResult, PreserveConfig, PREAMBLE};

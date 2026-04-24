@@ -10,6 +10,7 @@
 use crate::base62;
 use aho_corasick::{AhoCorasick, MatchKind};
 use rayon::prelude::*;
+use regex::Regex;
 use std::collections::HashMap;
 
 // ─── Structs ──────────────────────────────────────────────────────────────────
@@ -86,14 +87,16 @@ pub fn count_candidates(
 
 // ─── Selection — возвращает записи + их выбранные позиции ────────────────────
 
-/// Возвращает (entries, chosen_positions_per_entry).
+/// Возвращает (entries, chosen_positions_per_entry, preserved_count).
 /// chosen_positions[i] — отсортированные byte-offsets вхождений legend[i].
+/// preserved_count — число кандидатов, отфильтрованных preserve_re (для статистики/дебага).
 pub fn select_legend_with_positions(
     text: &str,
     max_entries: usize,
     max_ngram: usize,
     tag_offset: usize,
-) -> (Vec<LegendEntry>, Vec<Vec<usize>>) {
+    preserve_re: Option<&Regex>,
+) -> (Vec<LegendEntry>, Vec<Vec<usize>>, usize) {
     // 1. Count
     let counter = count_candidates(text, max_ngram, 5);
 
@@ -104,7 +107,20 @@ pub fn select_legend_with_positions(
         .collect();
 
     if candidates.is_empty() {
-        return (vec![], vec![]);
+        return (vec![], vec![], 0);
+    }
+
+    // 2b. Preserve filter — diagnostic identifiers (IPs, UUIDs, long hex) stay in body
+    let preserved_count = if let Some(re) = preserve_re {
+        let before = candidates.len();
+        candidates.retain(|(k, _)| !re.is_match(k));
+        before - candidates.len()
+    } else {
+        0
+    };
+
+    if candidates.is_empty() {
+        return (vec![], vec![], preserved_count);
     }
 
     candidates.sort_unstable_by(|a, b| {
@@ -180,7 +196,7 @@ pub fn select_legend_with_positions(
         chosen_positions.push(free);
     }
 
-    (legend, chosen_positions)
+    (legend, chosen_positions, preserved_count)
 }
 
 // Обёртка для обратной совместимости с compress.rs
@@ -190,7 +206,7 @@ pub fn select_legend(
     _min_profit: i64,
     max_ngram: usize,
 ) -> Vec<LegendEntry> {
-    select_legend_with_positions(text, max_entries, max_ngram, 0).0
+    select_legend_with_positions(text, max_entries, max_ngram, 0, None).0
 }
 
 // ─── Применение — прямая замена по известным позициям ────────────────────────

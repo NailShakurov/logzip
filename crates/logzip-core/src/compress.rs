@@ -1,6 +1,7 @@
 //! Main compression/decompression algorithm.
 
 use crate::{legend, normalizer, profiles, templates};
+use regex::Regex;
 use std::collections::HashMap;
 
 pub const PREAMBLE: &str = "\
@@ -9,6 +10,38 @@ pub const PREAMBLE: &str = "\
 # &tag:v → replace with LEGEND &tag pattern, substitute @ with v
 # PREFIX → prepend to every BODY line (if present)
 ";
+
+/// Controls which n-gram candidates are excluded from legend compression.
+///
+/// Use for LLM-facing output where context accuracy matters more than compression ratio.
+/// Patterns apply to isolated whitespace-split tokens; use anchors ^ and $ for strict matching.
+pub struct PreserveConfig {
+    /// Preserve built-in patterns: UUID v4, IPv4 (with optional :port), hex strings ≥16 chars.
+    pub preserve_ids: bool,
+    /// Additional user regex patterns. Each candidate matching any pattern stays in body verbatim.
+    pub extra_patterns: Vec<String>,
+}
+
+fn build_preserve_regex(config: &PreserveConfig) -> Option<Regex> {
+    let mut parts: Vec<String> = Vec::new();
+    if config.preserve_ids {
+        parts.push(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$".to_string());
+        parts.push(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?::\d+)?$".to_string());
+        parts.push(r"^[0-9a-fA-F]{16,}$".to_string());
+    }
+    parts.extend(config.extra_patterns.iter().cloned());
+    if parts.is_empty() {
+        return None;
+    }
+    let combined = parts.iter().map(|p| format!("(?:{p})")).collect::<Vec<_>>().join("|");
+    match Regex::new(&combined) {
+        Ok(re) => Some(re),
+        Err(e) => {
+            eprintln!("[logzip] Warning: invalid preserve pattern — {e}");
+            None
+        }
+    }
+}
 
 pub struct CompressResult {
     pub body: String,
@@ -27,6 +60,7 @@ pub fn compress(
     profile: Option<&str>,
     do_templates: bool,
     bpe_passes: usize,
+    preserve: Option<&PreserveConfig>,
 ) -> CompressResult {
     let original_len = text.len();
 
@@ -47,9 +81,13 @@ pub fn compress(
         common_prefix = norm.common_prefix;
     }
 
+    // Build preserve regex once — applied to candidate dicts, not raw text
+    let preserve_re = preserve.and_then(build_preserve_regex);
+    let preserve_re_ref = preserve_re.as_ref();
+
     // 3+4. Select legend entries + collect chosen positions (O(N) NFA scan)
-    let (legend, chosen_positions) =
-        legend::select_legend_with_positions(&working, max_legend_entries, max_ngram, 0);
+    let (legend, chosen_positions, preserved_count) =
+        legend::select_legend_with_positions(&working, max_legend_entries, max_ngram, 0, preserve_re_ref);
 
     // 5. Direct substitution from known positions — no second AhoCorasick scan
     let mut body_working =
@@ -63,11 +101,12 @@ pub fn compress(
             break;
         }
         let tag_offset = all_legend.len();
-        let (meta_legend, meta_positions) = legend::select_legend_with_positions(
+        let (meta_legend, meta_positions, _) = legend::select_legend_with_positions(
             &body_working,
             max_legend_entries,
             max_ngram,
             tag_offset,
+            preserve_re_ref,
         );
         if meta_legend.is_empty() {
             break;
@@ -114,6 +153,7 @@ pub fn compress(
     stats.insert("template_entries".to_string(), tmpl_list.len().to_string());
     stats.insert("profile".to_string(), detected_profile.clone());
     stats.insert("bpe_passes_used".to_string(), passes_used.to_string());
+    stats.insert("preserved_candidates".to_string(), preserved_count.to_string());
 
     CompressResult {
         body,
@@ -192,7 +232,6 @@ fn flatten_legend(
 
 // ─── Section regexes for decompress ──────────────────────────────────────────
 
-use regex::Regex;
 use std::sync::OnceLock;
 
 static SECTION_RE: OnceLock<Regex> = OnceLock::new();

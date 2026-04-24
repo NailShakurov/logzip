@@ -18,8 +18,12 @@ pub fn list() -> Result<Value, RpcError> {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "path":    { "type": "string", "description": "Absolute path to the log file" },
-                        "quality": { "type": "string", "enum": ["fast", "balanced", "max"], "default": "balanced" }
+                        "path":             { "type": "string", "description": "Absolute path to the log file" },
+                        "quality":          { "type": "string", "enum": ["fast", "balanced", "max"], "default": "balanced" },
+                        "preserve_patterns": {
+                            "type": "array", "items": { "type": "string" },
+                            "description": "Extra regex patterns to keep in body (e.g. REQ-\\d+-\\w+). Use strict anchors ^ and $."
+                        }
                     },
                     "required": ["path"]
                 }
@@ -30,9 +34,13 @@ pub fn list() -> Result<Value, RpcError> {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "path":    { "type": "string", "description": "Absolute path to the log file" },
-                        "lines":   { "type": "integer", "minimum": 1, "default": 500, "description": "Number of tail lines to compress" },
-                        "quality": { "type": "string", "enum": ["fast", "balanced", "max"], "default": "balanced" }
+                        "path":             { "type": "string", "description": "Absolute path to the log file" },
+                        "lines":            { "type": "integer", "minimum": 1, "default": 500, "description": "Number of tail lines to compress" },
+                        "quality":          { "type": "string", "enum": ["fast", "balanced", "max"], "default": "balanced" },
+                        "preserve_patterns": {
+                            "type": "array", "items": { "type": "string" },
+                            "description": "Extra regex patterns to keep in body (e.g. REQ-\\d+-\\w+). Use strict anchors ^ and $."
+                        }
                     },
                     "required": ["path"]
                 }
@@ -64,15 +72,22 @@ pub fn call(params: Option<&Value>, sandbox: &Sandbox) -> Result<Value, RpcError
     let path = sandbox.validate(path_str)
         .map_err(|e| RpcError { code: -32602, message: e })?;
 
+    // preserve_ids always true for MCP — context accuracy over compression ratio
+    let extra_patterns: Vec<String> = args["preserve_patterns"]
+        .as_array()
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+        .unwrap_or_default();
+    let preserve = logzip_core::PreserveConfig { preserve_ids: true, extra_patterns };
+
     match name {
         "compress_file" => {
             let quality = args["quality"].as_str().unwrap_or("balanced");
-            compress_file_impl(&path, quality).map_err(|e| RpcError { code: -32603, message: e })
+            compress_file_impl(&path, quality, &preserve).map_err(|e| RpcError { code: -32603, message: e })
         }
         "compress_tail" => {
             let lines = args["lines"].as_u64().unwrap_or(500) as usize;
             let quality = args["quality"].as_str().unwrap_or("balanced");
-            compress_tail_impl(&path, lines, quality).map_err(|e| RpcError { code: -32603, message: e })
+            compress_tail_impl(&path, lines, quality, &preserve).map_err(|e| RpcError { code: -32603, message: e })
         }
         "get_stats" => {
             get_stats_impl(&path).map_err(|e| RpcError { code: -32603, message: e })
@@ -85,7 +100,8 @@ pub fn compress_tail_internal(path: &Path, lines: usize, quality: &str) -> Resul
     let text = read_tail(path, lines)
         .map_err(|e| RpcError { code: -32603, message: format!("Cannot read tail: {}", e) })?;
     let (max_legend, bpe_passes) = quality_params(quality);
-    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes);
+    let preserve = logzip_core::PreserveConfig { preserve_ids: true, extra_patterns: vec![] };
+    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes, Some(&preserve));
     Ok(result.render(true))
 }
 
@@ -103,20 +119,31 @@ fn quality_params(quality: &str) -> (usize, usize) {
     }
 }
 
-fn compress_file_impl(path: &Path, quality: &str) -> Result<Value, String> {
+fn compress_file_impl(path: &Path, quality: &str, preserve: &logzip_core::PreserveConfig) -> Result<Value, String> {
     let text = std::fs::read_to_string(path)
         .map_err(|e| format!("Cannot read file: {}", e))?;
     let (max_legend, bpe_passes) = quality_params(quality);
-    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes);
+    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes, Some(preserve));
+    log_preserved(&result);
     Ok(content_text(result.render(true)))
 }
 
-fn compress_tail_impl(path: &Path, lines: usize, quality: &str) -> Result<Value, String> {
+fn compress_tail_impl(path: &Path, lines: usize, quality: &str, preserve: &logzip_core::PreserveConfig) -> Result<Value, String> {
     let text = read_tail(path, lines)
         .map_err(|e| format!("Cannot read file tail: {}", e))?;
     let (max_legend, bpe_passes) = quality_params(quality);
-    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes);
+    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes, Some(preserve));
+    log_preserved(&result);
     Ok(content_text(result.render(true)))
+}
+
+fn log_preserved(result: &logzip_core::CompressResult) {
+    let n: usize = result.stats.get("preserved_candidates")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    if n > 0 {
+        eprintln!("[logzip-mcp] {n} candidate(s) preserved from legend (IDs/patterns kept in body)");
+    }
 }
 
 fn get_stats_impl(path: &Path) -> Result<Value, String> {
@@ -136,7 +163,7 @@ fn get_stats_impl(path: &Path) -> Result<Value, String> {
     let mut f = std::fs::File::open(path).map_err(|e| e.to_string())?;
     f.read(&mut sample_buf).map_err(|e| e.to_string())?;
     let sample_str = String::from_utf8_lossy(&sample_buf);
-    let mini = logzip_core::compress(&sample_str, 1, 1, false, None, false, 1);
+    let mini = logzip_core::compress(&sample_str, 1, 1, false, None, false, 1, None);
     let detected_profile = mini.detected_profile;
 
     let recommended_tool = if estimated_tokens > 50_000 {
@@ -210,11 +237,15 @@ mod tests {
               .collect()
     }
 
+    fn default_preserve() -> logzip_core::PreserveConfig {
+        logzip_core::PreserveConfig { preserve_ids: false, extra_patterns: vec![] }
+    }
+
     #[test]
     fn test_compress_file_returns_content_array() {
         let tmp = env::temp_dir().join("logzip_tools_test_cf.log");
         fs::write(&tmp, sample_log(50)).unwrap();
-        let result = compress_file_impl(&tmp, "fast").unwrap();
+        let result = compress_file_impl(&tmp, "fast", &default_preserve()).unwrap();
         assert!(result["content"].is_array());
         assert_eq!(result["content"][0]["type"], "text");
         let text = result["content"][0]["text"].as_str().unwrap();
@@ -226,7 +257,7 @@ mod tests {
     fn test_compress_tail_returns_last_n_lines() {
         let tmp = env::temp_dir().join("logzip_tools_test_ct.log");
         fs::write(&tmp, sample_log(200)).unwrap();
-        let result = compress_tail_impl(&tmp, 10, "fast").unwrap();
+        let result = compress_tail_impl(&tmp, 10, "fast", &default_preserve()).unwrap();
         let text = result["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("BODY"));
         fs::remove_file(tmp).unwrap();
@@ -242,6 +273,40 @@ mod tests {
         assert!(stats["file_size_bytes"].as_u64().unwrap() > 0);
         assert!(stats["estimated_tokens"].as_u64().unwrap() > 0);
         assert!(stats["recommended_tool"].as_str().is_some());
+        fs::remove_file(tmp).unwrap();
+    }
+
+    #[test]
+    fn test_preserve_ids_ip_stays_in_body() {
+        let log: String = (0..100)
+            .map(|i| format!("2024-01-01 INFO request from 192.168.1.100 path=/api/{i}\n"))
+            .collect();
+        let tmp = env::temp_dir().join("logzip_preserve_ip_test.log");
+        fs::write(&tmp, &log).unwrap();
+        let preserve = logzip_core::PreserveConfig { preserve_ids: true, extra_patterns: vec![] };
+        let result = compress_file_impl(&tmp, "balanced", &preserve).unwrap();
+        let text = result["content"][0]["text"].as_str().unwrap();
+        // IP must not appear as a legend value (would be "= 192.168.1.100")
+        assert!(!text.contains("= 192.168.1.100"), "IP should not be a legend entry");
+        // IP must be visible in body
+        assert!(text.contains("192.168.1.100"), "IP should remain visible in body");
+        fs::remove_file(tmp).unwrap();
+    }
+
+    #[test]
+    fn test_preserve_custom_pattern() {
+        let log: String = (0..50)
+            .map(|i| format!("2024-01-01 INFO trace REQ-{i:05}-XYZ status=200\n"))
+            .collect();
+        let tmp = env::temp_dir().join("logzip_preserve_custom_test.log");
+        fs::write(&tmp, &log).unwrap();
+        let preserve = logzip_core::PreserveConfig {
+            preserve_ids: false,
+            extra_patterns: vec![r"^REQ-\d+-XYZ$".to_string()],
+        };
+        let result = compress_file_impl(&tmp, "balanced", &preserve).unwrap();
+        let text = result["content"][0]["text"].as_str().unwrap();
+        assert!(!text.contains("= REQ-"), "custom pattern should not be a legend entry");
         fs::remove_file(tmp).unwrap();
     }
 

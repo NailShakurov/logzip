@@ -19,7 +19,8 @@ fn main() {
         _ => {
             eprintln!("logzip {}", env!("CARGO_PKG_VERSION"));
             eprintln!("Usage:");
-            eprintln!("  logzip compress   -i <file> [-o <file>] [--quality fast|balanced|max] [--bpe-passes N] [--preamble] [--stats]");
+            eprintln!("  logzip compress   -i <file> [-o <file>] [--quality fast|balanced|max] [--bpe-passes N]");
+            eprintln!("                    [--preamble] [--stats] [--preserve-ids] [--preserve-pattern <regex>]... [--debug]");
             eprintln!("  logzip decompress -i <file> [-o <file>]");
             eprintln!("  logzip mcp        [--allow-dir <dir>]...");
             if cmd != "help" && cmd != "--help" && cmd != "-h" {
@@ -36,16 +37,22 @@ fn cmd_compress(args: &[String]) {
     let mut bpe_passes: Option<usize> = None;
     let mut preamble = false;
     let mut stats = false;
+    let mut preserve_ids = false;
+    let mut preserve_patterns: Vec<String> = Vec::new();
+    let mut debug = false;
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
-            "-i" | "--input"  => { i += 1; input_path  = args.get(i).cloned(); }
-            "-o" | "--output" => { i += 1; output_path = args.get(i).cloned(); }
-            "--quality"       => { i += 1; if let Some(q) = args.get(i) { quality = Box::leak(q.clone().into_boxed_str()); } }
-            "--bpe-passes"    => { i += 1; bpe_passes = args.get(i).and_then(|s| s.parse().ok()); }
-            "--preamble"      => { preamble = true; }
-            "--stats"         => { stats = true; }
+            "-i" | "--input"       => { i += 1; input_path  = args.get(i).cloned(); }
+            "-o" | "--output"      => { i += 1; output_path = args.get(i).cloned(); }
+            "--quality"            => { i += 1; if let Some(q) = args.get(i) { quality = Box::leak(q.clone().into_boxed_str()); } }
+            "--bpe-passes"         => { i += 1; bpe_passes = args.get(i).and_then(|s| s.parse().ok()); }
+            "--preamble"           => { preamble = true; }
+            "--stats"              => { stats = true; }
+            "--preserve-ids"       => { preserve_ids = true; }
+            "--preserve-pattern"   => { i += 1; if let Some(p) = args.get(i) { preserve_patterns.push(p.clone()); } }
+            "--debug"              => { debug = true; }
             _ => {}
         }
         i += 1;
@@ -71,7 +78,10 @@ fn cmd_compress(args: &[String]) {
         }
     };
 
-    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, passes);
+    let preserve_cfg = (preserve_ids || !preserve_patterns.is_empty()).then(|| {
+        logzip_core::PreserveConfig { preserve_ids, extra_patterns: preserve_patterns }
+    });
+    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, passes, preserve_cfg.as_ref());
     let output = result.render(preamble);
 
     match output_path {
@@ -87,7 +97,12 @@ fn cmd_compress(args: &[String]) {
         let orig  = s.get("original_chars").map(|v| v.as_str()).unwrap_or("?");
         let comp  = s.get("compressed_chars").map(|v| v.as_str()).unwrap_or("?");
         let ratio = s.get("ratio_pct").map(|v| v.as_str()).unwrap_or("?");
-        eprintln!("[logzip] {} → {} chars ({}% saved)", orig, comp, ratio);
+        let preserved = s.get("preserved_candidates").map(|v| v.as_str()).unwrap_or("0");
+        eprintln!("[logzip] {} → {} chars ({}% saved) | preserved={}", orig, comp, ratio, preserved);
+    }
+    if debug {
+        let preserved = result.stats.get("preserved_candidates").map(|v| v.as_str()).unwrap_or("0");
+        eprintln!("[logzip] debug: preserved_candidates={preserved}");
     }
 }
 
