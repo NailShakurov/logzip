@@ -2,6 +2,24 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## ✅ Прогресс (2026-04-24)
+
+| Task | Статус | Коммит |
+|---|---|---|
+| Task 1: Cargo Workspace skeleton | ✅ DONE | `06bfd44` |
+| Task 2: logzip-core + render() + PREAMBLE | ✅ DONE | `bf0fb8a` |
+| Task 3: logzip-py + maturin | ✅ DONE | `f8eded3` |
+| Task 4: sandbox.rs TDD | ✅ DONE | `8036a45` |
+| Task 5: tools.rs TDD | ✅ DONE | `8d21cc6` |
+| Task 6: mcp.rs JSON-RPC loop | ✅ DONE | `1c2ccad` |
+| Task 7: main.rs CLI dispatcher | ⏳ NEXT | — |
+| Task 8: smoke_mcp.py | ⬜ TODO | — |
+| Task 9: README + финал | ⬜ TODO | — |
+
+**Следующий шаг:** Task 7 — написать полный `crates/logzip-mcp/src/main.rs` с сабкомандами `compress`, `decompress`, `mcp`.
+
+---
+
 **Goal:** Добавить MCP-сервер к logzip через Cargo Workspace: три крейта (`logzip-core`, `logzip-py`, `logzip-mcp`), единый бинарник `logzip` с сабкомандами `compress`, `decompress`, `mcp`.
 
 **Architecture:** Существующий код из `src/` переезжает в `crates/logzip-core/`. PyO3-обёртка — в `crates/logzip-py/`. Новый крейт `crates/logzip-mcp/` собирает бинарник `logzip` с ручным JSON-RPC 2.0 через stdio. Зависимости MCP: только `serde` + `serde_json`, без tokio.
