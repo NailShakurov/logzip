@@ -96,14 +96,23 @@ Token estimation: 1 token ≈ 4 characters (rough estimate for English-like logs
 
 ## Install
 
+**Python API + `logzip-py` CLI:**
 ```bash
 pip install logzip
 ```
 
+**Rust CLI + MCP Server:**
+```bash
+cargo install logzip
+```
+
 ## CLI
 
+Two CLIs are available. Both provide `compress` and `decompress` subcommands with identical flags.
+
+**Rust binary** (`cargo install logzip` → `logzip`):
 ```bash
-# stdin → stdout (default mode)
+# stdin → stdout
 logzip compress < app.log
 
 # quality preset (fast|balanced|max)
@@ -118,11 +127,16 @@ logzip compress --preamble < app.log > compressed.txt
 # save + show stats
 logzip compress --stats -i app.log -o app.logzip
 
-# explicit profile (otherwise auto-detected)
-logzip compress --profile journalctl < /tmp/syslog.txt
-
 # decompress
 logzip decompress -i app.logzip
+```
+
+**Python CLI** (`pip install logzip` → `logzip-py`):
+```bash
+# same flags as above, plus:
+
+# explicit profile (otherwise auto-detected)
+logzip-py compress --profile journalctl < /tmp/syslog.txt
 ```
 
 ## Python API
@@ -150,11 +164,7 @@ original = decompress(result.render())
 
 ## MCP Server (Claude Desktop / Claude Code)
 
-Install the Rust binary:
-
-```bash
-cargo install logzip
-```
+Requires the Rust binary (`cargo install logzip`, see [Install](#install)).
 
 Add to your `claude_desktop_config.json`:
 
@@ -191,6 +201,33 @@ claude mcp add logzip -- logzip mcp --allow-dir /var/log
 | Prompt | Description |
 |---|---|
 | `analyze_logs` | Compresses the log server-side and prepares an SRE analysis context |
+
+### How to use
+
+LLMs don't automatically pick up MCP tools — you need to reference them explicitly. Two ways:
+
+**Option A — explicit ask (works everywhere):**
+> "Use logzip to analyze `/var/log/syslog`"
+
+**Option B — `analyze_logs` prompt (Claude Code):**
+```
+/mcp → logzip → analyze_logs → path: /var/log/syslog
+```
+This compresses the log server-side and drops an SRE-ready context into the conversation.
+
+**Option C — install the `log-analysis` skill (Claude Code, recommended):**
+
+The skill makes Claude automatically reach for logzip whenever you mention a log file — no explicit instruction needed.
+
+```bash
+# 1. Add the logzip repo as a plugin marketplace
+claude plugin marketplace add NailShakurov/logzip
+
+# 2. Install the plugin
+claude plugin install logzip@NailShakurov/logzip
+```
+
+After that, asking "what's in `/var/log/syslog`?" is enough — Claude calls `get_stats` and `compress_tail` on its own.
 
 ### Security
 

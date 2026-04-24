@@ -97,6 +97,18 @@ def benchmark():
         "Time (ms)": logzip_max_time * 1000,
         "Type": "text/llm"
     })
+    # 6. logzip (recursive)
+    start = time.perf_counter()
+    res_rec = compress(raw_text, max_ngram=2, max_legend_entries=128, bpe_passes=2)
+    rendered_rec = res_rec.render(with_preamble=True)
+    logzip_rec_time = time.perf_counter() - start
+    results.append({
+        "Method": "logzip (recursive)",
+        "Size (bytes)": len(rendered_rec.encode("utf-8")),
+        "Ratio": f"{len(rendered_rec.encode('utf-8'))/orig_size:.2%}",
+        "Time (ms)": logzip_rec_time * 1000,
+        "Type": "text/llm"
+    })
 
     print(f"\nBenchmark results for {log_path} ({orig_size/1024/1024:.2f} MB):")
     print("-" * 85)

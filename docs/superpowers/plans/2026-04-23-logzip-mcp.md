@@ -12,11 +12,11 @@
 | Task 4: sandbox.rs TDD | ✅ DONE | `8036a45` |
 | Task 5: tools.rs TDD | ✅ DONE | `8d21cc6` |
 | Task 6: mcp.rs JSON-RPC loop | ✅ DONE | `1c2ccad` |
-| Task 7: main.rs CLI dispatcher | ⏳ NEXT | — |
-| Task 8: smoke_mcp.py | ⬜ TODO | — |
-| Task 9: README + финал | ⬜ TODO | — |
+| Task 7: main.rs CLI dispatcher | ✅ DONE | `7e9746b` |
+| Task 8: smoke_mcp.py | ✅ DONE | `39b8399` |
+| Task 9: README + финал | ✅ DONE | `08565bd` |
 
-**Следующий шаг:** Task 7 — написать полный `crates/logzip-mcp/src/main.rs` с сабкомандами `compress`, `decompress`, `mcp`.
+**Статус: все задачи выполнены ✅**
 
 ---
 
