@@ -252,14 +252,40 @@ The model instantly spots the 500 error without wading through thousands of iden
 
 ## Architecture & Safety
 
-Pipeline: **normalize → find patterns → compress → refine → extract templates**
+```mermaid
+flowchart TD
+    A([raw log text]) --> B
+
+    subgraph pipe["Compression Pipeline"]
+        B["① Profile Detection\njournalctl · docker · uvicorn · nodejs · plain"]
+        C["② Normalizer\nANSI · timestamps · hex zeros · common prefix"]
+        D["③ Frequency Analysis\nparallel n-gram counting — rayon"]
+        E["④ Preserve Filter\nUUID · IPv4 · hex≥16 · custom regex\nkeeps diagnostic IDs in body"]
+        F["⑤ Greedy Legend Builder\nO(N) positional index — up to 512 entries"]
+        G["⑥ AhoCorasick Substitution\nsingle-pass k-way merge"]
+        H{bpe_passes > 0?}
+        I["⑦ Recursive BPE\n2nd-pass on compressed body"]
+        J["⑧ Template Extraction\nstructural repeats → &tag = value"]
+
+        B --> C --> D --> E --> F --> G --> H
+        H -->|yes| I --> J
+        H -->|no| J
+    end
+
+    J --> K([CompressResult])
+    K --> L[body]
+    K --> M[legend]
+    K --> N[templates]
+    K --> O[stats]
+```
 
 1. **Normalizer**: Collapses ANSI, timestamps, IPs, and common prefixes.
 2. **Frequency Analysis**: Parallel n-gram counting using `rayon`.
-3. **Greedy Legend**: Optimized selection using a positional index (O(N)).
-4. **Direct Replacement**: Fast substitution without re-scanning.
-5. **Second Pass**: Compresses repeated token sequences in the already-compressed body.
-6. **Templates**: Structural template extraction.
+3. **Preserve Filter**: Skips UUID, IPv4, long hex, and custom patterns — keeps them visible in the body for LLM analysis.
+4. **Greedy Legend**: Optimized selection using a positional index (O(N)).
+5. **Direct Replacement**: Fast substitution without re-scanning.
+6. **Second Pass**: Compresses repeated token sequences in the already-compressed body.
+7. **Templates**: Structural template extraction.
 
 ### Safety First
 - **Pure Rust**: Core logic is 100% Rust.
