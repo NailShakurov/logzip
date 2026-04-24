@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.2] - 2026-04-24
+
+### Added
+- `PreserveConfig { preserve_ids, extra_patterns }` в logzip-core: возможность сохранять идентификаторы (IP-адреса и кастомные regex) нетронутыми при сжатии.
+- MCP server: `preserve_ids=true` по умолчанию, параметр `preserve_patterns` в схеме инструментов.
+- CLI: флаги `--preserve-ids`, `--preserve-pattern <regex>` (повторяемый), `--debug`.
+- Python API: kwargs `preserve_ids=False`, `preserve_patterns=None`.
+- 2 новых теста: IP остаётся в body, кастомный паттерн `REQ-\d+-XYZ`.
+- `readme.workspace = true` для крейтов logzip-core и logzip-mcp (публикация на crates.io).
+
+---
+
+## [2.1.1] - 2026-04-24
+
+### Changed
+- `[workspace.dependencies]` для logzip-core — убирает дублирование `path+version` в зависимых крейтах.
+
+### CI
+- `publish.yml`: пропускаем ошибку "already exists" при публикации на crates.io (идемпотентность).
+
+---
+
+## [2.1.0] - 2026-04-24
+
+### Added
+- **Cargo workspace**: проект разбит на три крейта — `logzip-core` (алгоритм), `logzip-py` (PyO3 биндинги), `logzip-mcp` (MCP сервер).
+- **MCP сервер** (`logzip-mcp`) — JSON-RPC 2.0 сервер для интеграции с Claude Code и другими MCP-клиентами:
+  - `compress_file` — сжатие файла по пути.
+  - `compress_tail` — сжатие последних N строк файла.
+  - `get_stats` — статистика без записи результата.
+  - `sandbox.rs` — валидация путей через `canonicalize` (защита от path traversal).
+- Единый бинарник `logzip` с подкомандами `compress`, `decompress`, `mcp`.
+- **Claude Code плагин** (`.claude-plugin/plugin.json`) + скилл `skills/log-analysis/SKILL.md` — автотриггер MCP-инструментов при анализе логов.
+- `smoke_mcp.py` — 9 интеграционных сценариев для MCP сервера.
+
+### CI
+- Задача публикации на crates.io в `publish.yml`.
+
+---
+
 ## [1.1.0] - 2026-04-22
 
 ### Added
