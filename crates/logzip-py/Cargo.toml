@@ -10,5 +10,5 @@ name = "_logzip"
 crate-type = ["cdylib"]
 
 [dependencies]
-logzip-core = { path = "../logzip-core" }
+logzip-core.workspace = true
 pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"] }

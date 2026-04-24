@@ -17,5 +17,5 @@ from logzip._logzip import (  # type: ignore[import]
     decompress_log as decompress,
 )
 
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 __all__ = ["compress", "decompress", "CompressResult"]
