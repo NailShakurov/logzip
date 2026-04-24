@@ -148,6 +148,58 @@ result = compress(
 original = decompress(result.render())
 ```
 
+## MCP Server (Claude Desktop / Claude Code)
+
+Install the Rust binary:
+
+```bash
+cargo install logzip
+```
+
+Add to your `claude_desktop_config.json`:
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "logzip": {
+      "command": "logzip",
+      "args": ["mcp", "--allow-dir", "/var/log", "--allow-dir", "/home/user/logs"]
+    }
+  }
+}
+```
+
+Or add via Claude Code CLI:
+
+```bash
+claude mcp add logzip -- logzip mcp --allow-dir /var/log
+```
+
+### Available tools
+
+| Tool | Description |
+|---|---|
+| `get_stats(path)` | File size, token estimate, detected profile — call first to decide strategy |
+| `compress_file(path, quality)` | Compress entire file — for files < 200 K tokens |
+| `compress_tail(path, lines, quality)` | Compress last N lines — efficient for large files |
+
+### Available prompts
+
+| Prompt | Description |
+|---|---|
+| `analyze_logs` | Compresses the log server-side and prepares an SRE analysis context |
+
+### Security
+
+The MCP server only reads files inside directories specified via `--allow-dir`.  
+If no `--allow-dir` is given, defaults to the current working directory.  
+All paths are canonicalized before comparison to prevent path traversal attacks.
+
+---
+
 ## Through the eyes of an LLM
 
 Unlike `gzip/zstd` which produce binary noise, `logzip` produces **structured text**. The model reads the legend once and works with the compressed body directly — it doesn't need to expand every token to understand the log.
@@ -190,5 +242,5 @@ Priority:
 - [ ] Streaming mode for multi-GB logs
 
 Planned:
-- [ ] MCP server for Claude Code
+- [x] MCP server for Claude Code
 - [ ] Suffix automaton for arbitrary repetition search
