@@ -1,6 +1,6 @@
 # logzip (Rust)
 
-[![PyPI version](https://img.shields.io/pypi/v/logzip.svg)](https://pypi.org/project/logzip/)
+[![PyPI version](https://img.shields.io/pypi/v/logzip)](https://pypi.org/project/logzip/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/logzip.svg)](https://pypi.org/project/logzip/)
 [![Python 3.9+](https://img.shields.io/pypi/pyversions/logzip.svg)](https://pypi.org/project/logzip/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
