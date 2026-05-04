@@ -22,6 +22,7 @@ pub async fn serve() {
     let app = Router::new()
         .route("/mcp", post(handle_mcp))
         .route("/health", get(|| async { "ok" }))
+        .route("/.well-known/mcp/server-card.json", get(server_card))
         .layer(cors);
 
     let addr = format!("0.0.0.0:{}", port);
@@ -73,6 +74,26 @@ fn dispatch(method: &str, params: Option<&Value>) -> Result<Value, tools::RpcErr
         }
         _ => Err(tools::RpcError { code: -32601, message: format!("Method not found: {}", method) }),
     }
+}
+
+async fn server_card() -> Json<Value> {
+    Json(json!({
+        "name": "logzip",
+        "version": env!("CARGO_PKG_VERSION"),
+        "description": "Compress logs for LLM analysis — native Rust MCP server",
+        "tools": [{
+            "name": "compress_content",
+            "description": "Compress log text pasted directly into the conversation using logzip.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "content": { "type": "string", "description": "Log text to compress" },
+                    "quality": { "type": "string", "enum": ["fast", "balanced", "max"], "default": "balanced" }
+                },
+                "required": ["content"]
+            }
+        }]
+    }))
 }
 
 fn err(id: Value, code: i32, message: &str) -> Value {
