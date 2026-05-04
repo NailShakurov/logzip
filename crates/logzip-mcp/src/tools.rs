@@ -9,23 +9,6 @@ pub struct RpcError {
     pub message: String,
 }
 
-pub fn list_http() -> Result<Value, RpcError> {
-    Ok(json!({
-        "tools": [{
-            "name": "compress_content",
-            "description": "Compress log text pasted directly into the conversation using logzip.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "content": { "type": "string", "description": "Log text to compress" },
-                    "quality": { "type": "string", "enum": ["fast", "balanced", "max"], "default": "balanced" }
-                },
-                "required": ["content"]
-            }
-        }]
-    }))
-}
-
 pub fn compress_content(args: &Value) -> Result<Value, RpcError> {
     let content = args["content"].as_str()
         .ok_or_else(|| RpcError { code: -32602, message: "Missing required argument: content".into() })?;

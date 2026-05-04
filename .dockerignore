@@ -1,0 +1,31 @@
+# flyctl launch added from .gitignore
+# Rust
+**/target
+**/Cargo.lock
+
+# Python
+**/__pycache__
+**/*.py[cod]
+**/*$py.class
+**/*.so
+**/*.pyd
+**/.pytest_cache
+**/venv
+**/dist
+**/build
+
+# Project specific
+**/logzip_py
+**/log.log
+**/compressed.log
+**/log.compressed.txt
+**/notes
+**/docs
+**/.claude
+**/CLAUDE.md
+**/scratch
+
+# flyctl launch added from .pytest_cache/.gitignore
+# Created by pytest automatically.
+.pytest_cache/**/*
+fly.toml
