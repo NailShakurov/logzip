@@ -9,9 +9,48 @@ pub struct RpcError {
     pub message: String,
 }
 
+pub fn list_http() -> Result<Value, RpcError> {
+    Ok(json!({
+        "tools": [{
+            "name": "compress_content",
+            "description": "Compress log text pasted directly into the conversation using logzip.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "content": { "type": "string", "description": "Log text to compress" },
+                    "quality": { "type": "string", "enum": ["fast", "balanced", "max"], "default": "balanced" }
+                },
+                "required": ["content"]
+            }
+        }]
+    }))
+}
+
+pub fn compress_content(args: &Value) -> Result<Value, RpcError> {
+    let content = args["content"].as_str()
+        .ok_or_else(|| RpcError { code: -32602, message: "Missing required argument: content".into() })?;
+    let quality = args["quality"].as_str().unwrap_or("balanced");
+    let preserve = logzip_core::PreserveConfig { preserve_ids: true, extra_patterns: vec![] };
+    let (max_legend, bpe_passes) = quality_params(quality);
+    let result = logzip_core::compress(content, 2, max_legend, true, None, true, bpe_passes, Some(&preserve));
+    Ok(content_text(result.render(true)))
+}
+
 pub fn list() -> Result<Value, RpcError> {
     Ok(json!({
         "tools": [
+            {
+                "name": "compress_content",
+                "description": "Compress log text pasted directly into the conversation using logzip.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "content": { "type": "string", "description": "Log text to compress" },
+                        "quality": { "type": "string", "enum": ["fast", "balanced", "max"], "default": "balanced" }
+                    },
+                    "required": ["content"]
+                }
+            },
             {
                 "name": "compress_file",
                 "description": "Compress an entire log file using logzip and return the result ready for LLM analysis.",
@@ -65,6 +104,10 @@ pub fn call(params: Option<&Value>, sandbox: &Sandbox) -> Result<Value, RpcError
     let name = params["name"].as_str()
         .ok_or_else(|| RpcError { code: -32602, message: "Missing tool name".into() })?;
     let args = &params["arguments"];
+
+    if name == "compress_content" {
+        return compress_content(args);
+    }
 
     let path_str = args["path"].as_str()
         .ok_or_else(|| RpcError { code: -32602, message: "Missing required argument: path".into() })?;

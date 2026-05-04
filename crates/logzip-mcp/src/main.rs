@@ -1,3 +1,4 @@
+mod http;
 mod mcp;
 mod sandbox;
 mod tools;
@@ -13,6 +14,7 @@ fn main() {
         "compress"   => cmd_compress(&args[2..]),
         "decompress" => cmd_decompress(&args[2..]),
         "mcp"        => cmd_mcp(&args[2..]),
+        "http"       => cmd_http(),
         "--version" | "-V" => {
             println!("logzip {}", env!("CARGO_PKG_VERSION"));
         }
@@ -23,6 +25,7 @@ fn main() {
             eprintln!("                    [--preamble] [--stats] [--preserve-ids] [--preserve-pattern <regex>]... [--debug]");
             eprintln!("  logzip decompress -i <file> [-o <file>]");
             eprintln!("  logzip mcp        [--allow-dir <dir>]...");
+            eprintln!("  logzip http       (HTTP MCP server, reads $PORT, default 8080)");
             if cmd != "help" && cmd != "--help" && cmd != "-h" {
                 std::process::exit(1);
             }
@@ -171,4 +174,10 @@ fn cmd_mcp(args: &[String]) {
     });
 
     mcp::run(sandbox);
+}
+
+fn cmd_http() {
+    tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(http::serve());
 }
