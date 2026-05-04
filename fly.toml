@@ -1,24 +1,23 @@
-app = "logzip-mcp"
-primary_region = "ams"
+# fly.toml app configuration file generated for logzip-mcp on 2026-05-04T12:11:55+05:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'logzip-mcp'
+primary_region = 'ams'
 
 [build]
-
-[env]
-  PORT = "8080"
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-
-  [http_service.concurrency]
-    type = "requests"
-    hard_limit = 200
-    soft_limit = 100
+  processes = ['app']
 
 [[vm]]
-  memory = "256mb"
-  cpu_kind = "shared"
+  memory = '256mb'
+  cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 256
