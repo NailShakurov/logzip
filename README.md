@@ -162,7 +162,37 @@ result = compress(
 original = decompress(result.render())
 ```
 
-## MCP Server (Claude Desktop / Claude Code)
+## MCP Server — Zero Install (Cloud)
+
+Most tools tell you to grep. logzip goes further.
+
+Connect logzip directly to Claude, Cursor, or any MCP-compatible client as a remote server —
+no download, no compilation, no Docker required.
+
+```json
+{
+  "mcpServers": {
+    "logzip": {
+      "url": "https://logzip-mcp.fly.dev/mcp"
+    }
+  }
+}
+```
+
+Native Rust on Fly.io keeps latency minimal. Paste a log into the chat — Claude compresses
+and reads it immediately.
+
+**Available tool in cloud mode:**
+
+| Tool | Description |
+|---|---|
+| `compress_content(content, quality)` | Compress log text pasted directly into the conversation |
+
+> File-based tools (`compress_file`, `compress_tail`, `get_stats`) require local installation — see below.
+
+---
+
+## MCP Server (Local — Claude Desktop / Claude Code)
 
 Requires the Rust binary (`cargo install logzip`, see [Install](#install)).
 
@@ -192,6 +222,7 @@ claude mcp add logzip -- logzip mcp --allow-dir /var/log
 
 | Tool | Description |
 |---|---|
+| `compress_content(content, quality)` | Compress log text pasted directly into the conversation |
 | `get_stats(path)` | File size, token estimate, detected profile — call first to decide strategy |
 | `compress_file(path, quality)` | Compress entire file — for files < 200 K tokens |
 | `compress_tail(path, lines, quality)` | Compress last N lines — efficient for large files |
