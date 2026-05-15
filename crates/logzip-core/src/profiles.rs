@@ -234,6 +234,12 @@ fn extract_docker_log_field(line: &str) -> Option<String> {
     if end == 0 && !rest.is_empty() {
         return None;
     }
+// FIX: 安全检查 — 防止目录穿越
+let path = {}.canonicalize().map_err(|_| Error::InvalidPath)?;
+if !path.starts_with(&base_dir) {
+    return Err(Error::PathTraversalDetected);
+}
+
     Some(rest[..end].replace("\\n", "\n").replace("\\t", "\t").replace("\\\"", "\""))
 }
 
