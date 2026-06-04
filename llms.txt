@@ -1,102 +1,83 @@
-# RagCode MCP Server
+# logzip
 
-<!-- AI Agents: This is the summarized documentation for RagCode. For full details, see llms-full.txt -->
+> Compress logs before sending them to an LLM. Rust core (PyO3), Python API, CLI, and a local MCP server. Output is structured text — the model reads a legend once and works with the compressed body directly. Typical savings: 52–58% on structured logs (systemd/journalctl, uvicorn, docker, nodejs).
 
-> Privacy-first MCP server for semantic code search using RAG. Runs 100% locally.
+## Why logzip?
 
-## Why RagCode?
+- **Context limit**: a 10 MB log is ~2.5M tokens. logzip cuts repeating lines into a legend (`#0# = ...`) so the same information fits in a fraction of the tokens.
+- **Signal over noise**: anomalies and unique lines stay uncompressed in the BODY — errors stand out instead of drowning in identical INFO lines.
+- **LLM-readable output**: unlike gzip/zstd binary, the output is plain text (PREFIX / LEGEND / BODY sections) that any model can decode by following the preamble rules.
+- **Lossless where it matters**: latency/time fields and other plain numbers are never truncated; `--exact-timestamps` keeps full sub-second timestamp precision for byte-accurate roundtrips.
 
-- **5-10x faster** code understanding vs. reading files manually
-- **98% token savings** - returns only relevant code, not entire files
-- **Zero cost** - no API fees, runs on local Ollama + Qdrant
-- **Privacy-first** - code never leaves your machine
+## Install
 
-## RagCode vs Generic RAG
+- Python CLI + API: `pip install logzip` (binary `logzip-py`)
+- Rust CLI + MCP server: `cargo install logzip` (binary `logzip`)
 
-Unlike generic RAG that splits code into arbitrary text chunks, RagCode:
-- **Semantic chunking** - extracts complete functions, classes, methods (not random 512-token splits)
-- **Rich metadata** - name, type, parameters, return type, dependencies, line numbers
-- **Relationships** - knows class inheritance, method calls, imports
-- **AST parsing** - understands Go, PHP, Python syntax (not regex/heuristics)
-- **Exact + semantic search** - find "UserController" exactly, not just similar text
-- **Complete code units** - AI sees runnable code, not fragments
+## CLI
 
-## Compatibility
-
-- **IDEs:** Windsurf, Cursor, VS Code + GitHub Copilot, Claude Desktop, Antigravity
-- **Languages:** Go, PHP (Laravel), Python (full support with classes, decorators, type hints)
-- **Planned:** JavaScript/TypeScript (tree-sitter based)
-- **OS:** Linux, macOS, Windows (all require Docker)
-
-## Quick Install
-
-**Linux:**
 ```bash
-curl -fsSL https://github.com/doITmagic/rag-code-mcp/releases/latest/download/rag-code-mcp_linux_amd64.tar.gz | tar xz && ./ragcode-installer -ollama=docker -qdrant=docker
+logzip compress -i app.log -o app.lz --quality balanced --bpe-passes 2   # recommended
+logzip decompress -i app.lz -o app.log
 ```
 
-**macOS (Apple Silicon):**
+Key flags: `--quality fast|balanced|max`, `--bpe-passes N`, `--preamble` (LLM decode instructions), `--stats`, `--preserve-ids`, `--preserve-pattern <regex>` (repeatable), `--exact-timestamps` (full sub-second timestamp precision), `--profile journalctl|docker|uvicorn|nodejs|plain` (Python CLI; otherwise auto-detected).
+
+## Python API
+
+```python
+from logzip import compress, decompress
+
+result = compress(raw_log_text, bpe_passes=2)
+print(result.render(with_preamble=True))   # → send to LLM
+original = decompress(result.render())
+```
+
+Kwargs: `max_legend_entries`, `bpe_passes`, `do_normalize`, `do_templates`, `profile`, `preserve_ids`, `preserve_patterns`, `exact_timestamps`.
+
+## MCP Server (local, stdio)
+
 ```bash
-curl -fsSL https://github.com/doITmagic/rag-code-mcp/releases/latest/download/rag-code-mcp_darwin_arm64.tar.gz | tar xz && ./ragcode-installer -ollama=docker -qdrant=docker
+claude mcp add logzip -- logzip mcp --allow-dir /var/log
 ```
 
-**macOS (Intel):**
+Tools:
+1. `get_stats(path)` — file size, token estimate, detected profile. Call first to decide strategy.
+2. `compress_content(content, quality)` — compress log text pasted into the conversation.
+3. `compress_file(path, quality)` — compress an entire file (< 200K tokens).
+4. `compress_tail(path, lines, quality)` — compress the last N lines; efficient for large files.
+
+Prompt: `analyze_logs` — compresses the log server-side and prepares an SRE analysis context.
+
+Security: the server only reads inside `--allow-dir` directories (default: CWD); all paths are canonicalized against path traversal.
+
+## Claude Code plugin (auto-trigger)
+
 ```bash
-curl -fsSL https://github.com/doITmagic/rag-code-mcp/releases/latest/download/rag-code-mcp_darwin_amd64.tar.gz | tar xz && ./ragcode-installer -ollama=docker -qdrant=docker
+claude plugin marketplace add NailShakurov/logzip
+claude plugin install logzip@logzip
 ```
 
-**Windows (PowerShell):**
-```powershell
-Invoke-WebRequest -Uri "https://github.com/doITmagic/rag-code-mcp/releases/latest/download/rag-code-mcp_windows_amd64.zip" -OutFile "ragcode.zip"; Expand-Archive ragcode.zip -DestinationPath . -Force; .\ragcode-installer.exe -ollama=docker -qdrant=docker
-```
+Installs the `log-analysis` skill: mentioning a log file is enough — Claude calls `get_stats` / `compress_tail` on its own.
 
-**Windows with WSL:** Install Linux version in WSL, then configure Windows IDEs to use `wsl.exe` as command with args `["-e", "/home/USER/.local/share/ragcode/bin/rag-code-mcp"]`.
+## How compression works (6 stages)
 
-Key flags: `-ollama` (docker/local), `-qdrant` (docker/remote), `-gpu`, `-models-dir`, `-skip-build`
-
-## Example Usage
-
-User: "Find authentication middleware in this codebase"
-→ RagCode uses `search_code` tool
-→ Returns exact functions with file paths and line numbers
-→ AI can now reason about the code without reading 50 files
-
-## 9 MCP Tools
-
-1. `search_code` - **USE FIRST** - Semantic search by MEANING. Returns complete source code + file:line. Better than hybrid_search for exploration. **Go, PHP, Python, HTML.**
-2. `hybrid_search` - Keyword + semantic for **EXACT matches** only. Returns code + file:line + metadata. Use when search_code misses exact terms. **Go, PHP, Python, HTML.**
-3. `get_function_details` - **COMPLETE** function source: signature, params, return types, body. **Go, PHP, Python.**
-4. `find_type_definition` - Complete type source with fields, methods, inheritance chain. **Go, PHP, Python.**
-5. `find_implementations` - All callers/usages with code snippets + file:line. **Use before refactoring.** **Go, PHP, Python.**
-6. `list_package_exports` - Structured list: symbol names, types, signatures. **Go, PHP, Python.**
-7. `search_docs` - Doc snippets with file paths. **Markdown only. Not for code** - use search_code.
-8. `get_code_context` - Code snippet with configurable context lines. **Any text file.**
-9. `index_workspace` - Reindex codebase. **USUALLY AUTOMATIC.** Call after git pull/branch switch. **Go, PHP, Python, HTML.**
-
-## Configuration
-
-Config file: `~/.local/share/ragcode/config.yaml`
-
-```yaml
-llm:
-  provider: "ollama"
-  model: "phi3:medium"
-  embed_model: "nomic-embed-text"
-
-storage:
-  vector_db:
-    url: "http://localhost:6333"
-```
+1. Profile detection (journalctl/docker/uvicorn/nodejs/plain)
+2. Normalization (ANSI strip, sub-second timestamp trim — disable with `--exact-timestamps`, hex leading zeros, common prefix extraction)
+3. Parallel frequency analysis (rayon n-grams)
+4. Greedy legend selection (O(N log N), positional indexing)
+5. Substitution + recursive BPE meta-passes (`--bpe-passes`)
+6. Template extraction (`&tag:value` patterns)
 
 ## Status
 
-✅ Production-ready | ✅ Active development | ✅ MIT License
+✅ MIT License | Rust + PyO3 | PyPI: logzip | crates.io: logzip
 
 ## Links
 
-- GitHub: https://github.com/doITmagic/rag-code-mcp
-- Full docs: https://github.com/doITmagic/rag-code-mcp/blob/main/llms-full.txt
+- GitHub: https://github.com/NailShakurov/logzip
+- PyPI: https://pypi.org/project/logzip/
 
 ## Keywords
 
-semantic-code-search, rag, retrieval-augmented-generation, mcp-server, model-context-protocol, ai-code-assistant, vector-search, code-navigation, ollama, qdrant, github-copilot, cursor-ai, windsurf, go, php, laravel, python, django, flask, local-ai, privacy-first, offline-ai, self-hosted, zero-cost
+log-compression, llm-context, token-savings, mcp-server, model-context-protocol, claude-code, log-analysis, sre, rag, rust, pyo3, journalctl, docker-logs, lossless-roundtrip

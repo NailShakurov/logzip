@@ -127,6 +127,9 @@ logzip compress --preamble < app.log > compressed.txt
 # save + show stats
 logzip compress --stats -i app.log -o app.logzip
 
+# lossless timestamps: keep full sub-second precision (default trims to milliseconds)
+logzip compress --exact-timestamps -i app.log -o app.logzip
+
 # decompress
 logzip decompress -i app.logzip
 ```
@@ -156,41 +159,12 @@ result = compress(
     bpe_passes=2,             # second-pass compression (compresses repeated token sequences)
     do_normalize=True,        # collapse timestamps, ANSI, IPs
     do_templates=True,        # structural template extraction
+    exact_timestamps=False,   # True → keep full sub-second timestamp precision
 )
 
 # decompress
 original = decompress(result.render())
 ```
-
-## MCP Server — Zero Install (Cloud)
-
-Most tools tell you to grep. logzip goes further.
-
-Connect logzip directly to Claude, Cursor, or any MCP-compatible client as a remote server —
-no download, no compilation, no Docker required.
-
-```json
-{
-  "mcpServers": {
-    "logzip": {
-      "url": "https://logzip-mcp.fly.dev/mcp"
-    }
-  }
-}
-```
-
-Native Rust on Fly.io keeps latency minimal. Paste a log into the chat — Claude compresses
-and reads it immediately.
-
-**Available tool in cloud mode:**
-
-| Tool | Description |
-|---|---|
-| `compress_content(content, quality)` | Compress log text pasted directly into the conversation |
-
-> File-based tools (`compress_file`, `compress_tail`, `get_stats`) require local installation — see below.
-
----
 
 ## MCP Server (Local — Claude Desktop / Claude Code)
 
