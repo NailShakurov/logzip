@@ -20,7 +20,7 @@ fn main() {
             eprintln!("logzip {}", env!("CARGO_PKG_VERSION"));
             eprintln!("Usage:");
             eprintln!("  logzip compress   -i <file> [-o <file>] [--quality fast|balanced|max] [--bpe-passes N]");
-            eprintln!("                    [--preamble] [--stats] [--preserve-ids] [--preserve-pattern <regex>]... [--debug]");
+            eprintln!("                    [--preamble] [--stats] [--preserve-ids] [--preserve-pattern <regex>]... [--exact-timestamps] [--debug]");
             eprintln!("  logzip decompress -i <file> [-o <file>]");
             eprintln!("  logzip mcp        [--allow-dir <dir>]...");
             if cmd != "help" && cmd != "--help" && cmd != "-h" {
@@ -39,6 +39,7 @@ fn cmd_compress(args: &[String]) {
     let mut stats = false;
     let mut preserve_ids = false;
     let mut preserve_patterns: Vec<String> = Vec::new();
+    let mut exact_timestamps = false;
     let mut debug = false;
 
     let mut i = 0;
@@ -52,6 +53,7 @@ fn cmd_compress(args: &[String]) {
             "--stats"              => { stats = true; }
             "--preserve-ids"       => { preserve_ids = true; }
             "--preserve-pattern"   => { i += 1; if let Some(p) = args.get(i) { preserve_patterns.push(p.clone()); } }
+            "--exact-timestamps"   => { exact_timestamps = true; }
             "--debug"              => { debug = true; }
             _ => {}
         }
@@ -81,7 +83,7 @@ fn cmd_compress(args: &[String]) {
     let preserve_cfg = (preserve_ids || !preserve_patterns.is_empty()).then(|| {
         logzip_core::PreserveConfig { preserve_ids, extra_patterns: preserve_patterns }
     });
-    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, passes, preserve_cfg.as_ref());
+    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, passes, preserve_cfg.as_ref(), exact_timestamps);
     let output = result.render(preamble);
 
     match output_path {

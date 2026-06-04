@@ -102,6 +102,7 @@ impl From<CompressResult> for PyCompressResult {
     bpe_passes = 1,
     preserve_ids = false,
     preserve_patterns = None,
+    exact_timestamps = false,
 ))]
 fn compress_log(
     text: String,
@@ -113,6 +114,7 @@ fn compress_log(
     bpe_passes: usize,
     preserve_ids: bool,
     preserve_patterns: Option<Vec<String>>,
+    exact_timestamps: bool,
 ) -> PyResult<PyCompressResult> {
     let preserve = if preserve_ids || preserve_patterns.as_ref().map(|v| !v.is_empty()).unwrap_or(false) {
         Some(logzip_core::PreserveConfig {
@@ -125,6 +127,7 @@ fn compress_log(
     let result = core_compress(
         &text, max_ngram, max_legend_entries, do_normalize,
         profile.as_deref(), do_templates, bpe_passes, preserve.as_ref(),
+        exact_timestamps,
     );
     Ok(PyCompressResult::from(result))
 }
@@ -140,6 +143,6 @@ fn _logzip(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compress_log, m)?)?;
     m.add_function(wrap_pyfunction!(decompress_log, m)?)?;
     m.add_class::<PyCompressResult>()?;
-    m.add("__version__", "2.1.2")?;
+    m.add("__version__", "2.1.3")?;
     Ok(())
 }

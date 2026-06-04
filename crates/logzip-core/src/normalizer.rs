@@ -16,7 +16,8 @@ fn ansi_re() -> &'static Regex {
 }
 
 fn nanos_re() -> &'static Regex {
-    NANOS_RE.get_or_init(|| Regex::new(r"(\.\d{3})\d{3,6}(Z|[+\-]\d{2}:?\d{2})?").unwrap())
+    // Только таймстемпы (hh:mm:ss.fff…) — обычные числа не трогаем (точность невосстановима)
+    NANOS_RE.get_or_init(|| Regex::new(r"(\d{2}:\d{2}:\d{2}\.\d{3})\d{3,6}(Z|[+\-]\d{2}:?\d{2})?").unwrap())
 }
 
 fn hex_re() -> &'static Regex {
@@ -105,9 +106,12 @@ pub struct NormalizeResult {
 }
 
 /// Apply normalization pipeline + extract common prefix.
-pub fn normalize(text: &str, extract_prefix: bool) -> NormalizeResult {
+/// `trim_timestamps = false` — сохранять субсекундную точность таймстемпов (lossless roundtrip).
+pub fn normalize(text: &str, extract_prefix: bool, trim_timestamps: bool) -> NormalizeResult {
     let mut out = strip_ansi(text);
-    out = trim_subsecond(&out);
+    if trim_timestamps {
+        out = trim_subsecond(&out);
+    }
     out = strip_hex_leading_zeros(&out);
     out = collapse_whitespace(&out);
 
@@ -134,5 +138,36 @@ pub fn normalize(text: &str, extract_prefix: bool) -> NormalizeResult {
     NormalizeResult {
         text: out,
         common_prefix,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keeps_plain_float_precision() {
+        // Числовые поля (latency, time) не должны терять точность
+        let r = normalize(r#"{"time":0.000031435,"msg":"ok"}"#, false, true);
+        assert!(r.text.contains("0.000031435"), "got: {}", r.text);
+    }
+
+    #[test]
+    fn keeps_epoch_micros_precision() {
+        let r = normalize("ts=1749031888.115983 ok", false, true);
+        assert!(r.text.contains("1749031888.115983"), "got: {}", r.text);
+    }
+
+    #[test]
+    fn trims_iso_timestamp_subseconds_by_default() {
+        let r = normalize("2026-06-04T10:11:28.115983Z ok", false, true);
+        assert!(r.text.contains("28.115Z"), "got: {}", r.text);
+        assert!(!r.text.contains("115983"), "got: {}", r.text);
+    }
+
+    #[test]
+    fn exact_timestamps_keeps_full_precision() {
+        let r = normalize("2026-06-04T10:11:28.115983Z ok", false, false);
+        assert!(r.text.contains("28.115983Z"), "got: {}", r.text);
     }
 }

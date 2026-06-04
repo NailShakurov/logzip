@@ -15,7 +15,7 @@ pub fn compress_content(args: &Value) -> Result<Value, RpcError> {
     let quality = args["quality"].as_str().unwrap_or("balanced");
     let preserve = logzip_core::PreserveConfig { preserve_ids: true, extra_patterns: vec![] };
     let (max_legend, bpe_passes) = quality_params(quality);
-    let result = logzip_core::compress(content, 2, max_legend, true, None, true, bpe_passes, Some(&preserve));
+    let result = logzip_core::compress(content, 2, max_legend, true, None, true, bpe_passes, Some(&preserve), false);
     Ok(content_text(result.render(true)))
 }
 
@@ -127,7 +127,7 @@ pub fn compress_tail_internal(path: &Path, lines: usize, quality: &str) -> Resul
         .map_err(|e| RpcError { code: -32603, message: format!("Cannot read tail: {}", e) })?;
     let (max_legend, bpe_passes) = quality_params(quality);
     let preserve = logzip_core::PreserveConfig { preserve_ids: true, extra_patterns: vec![] };
-    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes, Some(&preserve));
+    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes, Some(&preserve), false);
     Ok(result.render(true))
 }
 
@@ -149,7 +149,7 @@ fn compress_file_impl(path: &Path, quality: &str, preserve: &logzip_core::Preser
     let text = std::fs::read_to_string(path)
         .map_err(|e| format!("Cannot read file: {}", e))?;
     let (max_legend, bpe_passes) = quality_params(quality);
-    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes, Some(preserve));
+    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes, Some(preserve), false);
     log_preserved(&result);
     Ok(content_text(result.render(true)))
 }
@@ -158,7 +158,7 @@ fn compress_tail_impl(path: &Path, lines: usize, quality: &str, preserve: &logzi
     let text = read_tail(path, lines)
         .map_err(|e| format!("Cannot read file tail: {}", e))?;
     let (max_legend, bpe_passes) = quality_params(quality);
-    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes, Some(preserve));
+    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes, Some(preserve), false);
     log_preserved(&result);
     Ok(content_text(result.render(true)))
 }
@@ -189,7 +189,7 @@ fn get_stats_impl(path: &Path) -> Result<Value, String> {
     let mut f = std::fs::File::open(path).map_err(|e| e.to_string())?;
     f.read(&mut sample_buf).map_err(|e| e.to_string())?;
     let sample_str = String::from_utf8_lossy(&sample_buf);
-    let mini = logzip_core::compress(&sample_str, 1, 1, false, None, false, 1, None);
+    let mini = logzip_core::compress(&sample_str, 1, 1, false, None, false, 1, None, false);
     let detected_profile = mini.detected_profile;
 
     let recommended_tool = if estimated_tokens > 50_000 {

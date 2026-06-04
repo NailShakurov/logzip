@@ -203,3 +203,28 @@ def test_cli_quality_max_stat():
     )
     assert result.returncode == 0
     assert "--- BODY ---" in result.stdout
+
+
+def test_roundtrip_preserves_float_precision():
+    """Числовые поля (time/latency) не теряют точность при roundtrip с дефолтами."""
+    from logzip import compress, decompress
+
+    log = "\n".join([
+        '2026-06-04T10:11:28.115983Z app {"time":0.000031435,"msg":"ok"}',
+        '2026-06-04T10:11:29.225984Z app {"time":0.000045111,"msg":"ok"}',
+    ] * 5)
+    restored = decompress(compress(log).render())
+    assert '"time":0.000031435' in restored
+    assert '"time":0.000045111' in restored
+
+
+def test_exact_timestamps_roundtrip():
+    """exact_timestamps=True сохраняет субсекундную точность таймстемпов."""
+    from logzip import compress, decompress
+
+    log = "\n".join([
+        "2026-06-04T10:11:28.115983Z INFO request handled",
+        "2026-06-04T10:11:29.225984Z INFO request handled",
+    ] * 5)
+    restored = decompress(compress(log, exact_timestamps=True).render())
+    assert "2026-06-04T10:11:28.115983Z" in restored

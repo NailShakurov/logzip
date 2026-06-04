@@ -22,6 +22,7 @@ def main() -> None:
     pc.add_argument("--stats", action="store_true", help="Print stats to stderr")
     pc.add_argument("--max-ngram", type=int, default=2, help="Max n-gram size (default: 2)")
     pc.add_argument("--no-normalize", action="store_true", help="Skip normalization")
+    pc.add_argument("--exact-timestamps", action="store_true", help="Keep full sub-second timestamp precision (lossless roundtrip)")
     pc.add_argument("--no-templates", action="store_true", help="Skip template extraction")
     pc.add_argument("--quality", choices=["fast", "balanced", "max"], default="fast", help="Compression quality preset (default: fast)")
     pc.add_argument("--bpe-passes", type=int, default=None, metavar="N", help="BPE passes 1-3 (overrides --quality default)")
@@ -55,6 +56,7 @@ def main() -> None:
             profile=args.profile,
             do_templates=not args.no_templates,
             bpe_passes=bpe_passes,
+            exact_timestamps=args.exact_timestamps,
         )
         output = result.render(with_preamble=args.preamble)
 

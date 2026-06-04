@@ -61,6 +61,7 @@ pub fn compress(
     do_templates: bool,
     bpe_passes: usize,
     preserve: Option<&PreserveConfig>,
+    exact_timestamps: bool,
 ) -> CompressResult {
     let original_len = text.len();
 
@@ -76,7 +77,7 @@ pub fn compress(
     // 2. Normalize
     let mut common_prefix = String::new();
     if do_normalize {
-        let norm = normalizer::normalize(&working, true);
+        let norm = normalizer::normalize(&working, true, !exact_timestamps);
         working = norm.text;
         common_prefix = norm.common_prefix;
     }
