@@ -251,12 +251,15 @@ This compresses the log server-side and drops an SRE-ready context into the conv
 The skill makes Claude automatically reach for logzip whenever you mention a log file — no explicit instruction needed.
 
 ```bash
-# 1. Add the logzip repo as a plugin marketplace
+# 1. Register this repo as a single-plugin marketplace
+#    (reads .claude-plugin/marketplace.json from the repo root)
 claude plugin marketplace add NailShakurov/logzip
 
-# 2. Install the plugin
-claude plugin install logzip@NailShakurov/logzip
+# 2. Install the logzip plugin from that marketplace
+claude plugin install logzip@logzip
 ```
+
+The install target is `<plugin-name>@<marketplace-name>` — both are `logzip` here (the marketplace name comes from the `name` field in `marketplace.json`, not the repo path). To pull later updates, run `claude plugin marketplace update logzip`.
 
 After that, asking "what's in `/var/log/syslog`?" is enough — Claude calls `get_stats` and `compress_tail` on its own.
 
