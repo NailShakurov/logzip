@@ -1,0 +1,13 @@
+{
+  "name": "logzip",
+  "owner": {
+    "name": "NailShakurov"
+  },
+  "plugins": [
+    {
+      "name": "logzip",
+      "source": "./",
+      "description": "Efficient log compression for LLM analysis. Includes the log-analysis skill that automatically uses logzip MCP tools when analyzing log files, reducing token usage by 50-60%."
+    }
+  ]
+}
