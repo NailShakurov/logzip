@@ -35,3 +35,6 @@ manifest-path = "crates/logzip-py/Cargo.toml"
 python-source = "python"
 module-name = "logzip._logzip"
 features = ["pyo3/extension-module"]
+# maturin emits License-File: LICENSE metadata but doesn't bundle the file
+# from the workspace root into the sdist — PyPI rejects the mismatch (v2.1.3)
+include = [{ path = "LICENSE", format = "sdist" }]

@@ -83,6 +83,9 @@ jobs:
 
       - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # idempotent re-runs: don't fail on wheels already uploaded
+          skip-existing: true
 
   publish-crates:
     name: Publish to crates.io
