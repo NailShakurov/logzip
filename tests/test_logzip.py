@@ -228,3 +228,22 @@ def test_exact_timestamps_roundtrip():
     ] * 5)
     restored = decompress(compress(log, exact_timestamps=True).render())
     assert "2026-06-04T10:11:28.115983Z" in restored
+
+
+def test_lossless_roundtrip_byte_exact():
+    """lossless=True — байт-в-байт: микросекунды ISO + выравнивание трейсбэков."""
+    from logzip import compress, decompress
+
+    log = "\n".join([
+        "2026-06-04T10:11:28.115983Z ERROR boom",
+        "│   └ raise ValueError",
+        "│       └ deeper",
+        "2026-06-04T10:11:29.225984Z INFO ok",
+    ] * 5)
+    restored = decompress(compress(log, lossless=True).render())
+    assert restored == log
+
+    # trailing newline — тоже байт-в-байт
+    log_nl = log + "\n"
+    restored = decompress(compress(log_nl, lossless=True).render())
+    assert restored == log_nl

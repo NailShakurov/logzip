@@ -19,6 +19,7 @@ pub struct PyCompressResult {
     #[pyo3(get)]
     detected_profile: String,
     stats_raw: HashMap<String, String>,
+    trailing_newline: bool,
 }
 
 #[pymethods]
@@ -43,7 +44,11 @@ impl PyCompressResult {
         }
         parts.push("--- BODY ---".to_string());
         parts.push(self.body.clone());
-        parts.join("\n")
+        let mut out = parts.join("\n");
+        if self.trailing_newline {
+            out.push('\n');
+        }
+        out
     }
 
     fn stats_str(&self) -> String {
@@ -87,6 +92,7 @@ impl From<CompressResult> for PyCompressResult {
             common_prefix: r.common_prefix,
             detected_profile: r.detected_profile,
             stats_raw: r.stats,
+            trailing_newline: r.trailing_newline,
         }
     }
 }
@@ -103,6 +109,7 @@ impl From<CompressResult> for PyCompressResult {
     preserve_ids = false,
     preserve_patterns = None,
     exact_timestamps = false,
+    lossless = false,
 ))]
 fn compress_log(
     text: String,
@@ -115,6 +122,7 @@ fn compress_log(
     preserve_ids: bool,
     preserve_patterns: Option<Vec<String>>,
     exact_timestamps: bool,
+    lossless: bool,
 ) -> PyResult<PyCompressResult> {
     let preserve = if preserve_ids || preserve_patterns.as_ref().map(|v| !v.is_empty()).unwrap_or(false) {
         Some(logzip_core::PreserveConfig {
@@ -127,7 +135,7 @@ fn compress_log(
     let result = core_compress(
         &text, max_ngram, max_legend_entries, do_normalize,
         profile.as_deref(), do_templates, bpe_passes, preserve.as_ref(),
-        exact_timestamps,
+        exact_timestamps, lossless,
     );
     Ok(PyCompressResult::from(result))
 }

@@ -106,14 +106,17 @@ pub struct NormalizeResult {
 }
 
 /// Apply normalization pipeline + extract common prefix.
-/// `trim_timestamps = false` — сохранять субсекундную точность таймстемпов (lossless roundtrip).
-pub fn normalize(text: &str, extract_prefix: bool, trim_timestamps: bool) -> NormalizeResult {
+/// `trim_timestamps = false` — сохранять субсекунды таймстемпов.
+/// `collapse_ws = false` — сохранять выравнивание/отступы (нужно для lossless roundtrip).
+pub fn normalize(text: &str, extract_prefix: bool, trim_timestamps: bool, collapse_ws: bool) -> NormalizeResult {
     let mut out = strip_ansi(text);
     if trim_timestamps {
         out = trim_subsecond(&out);
     }
     out = strip_hex_leading_zeros(&out);
-    out = collapse_whitespace(&out);
+    if collapse_ws {
+        out = collapse_whitespace(&out);
+    }
 
     let mut common_prefix = String::new();
     if extract_prefix {
@@ -148,26 +151,39 @@ mod tests {
     #[test]
     fn keeps_plain_float_precision() {
         // Числовые поля (latency, time) не должны терять точность
-        let r = normalize(r#"{"time":0.000031435,"msg":"ok"}"#, false, true);
+        let r = normalize(r#"{"time":0.000031435,"msg":"ok"}"#, false, true, true);
         assert!(r.text.contains("0.000031435"), "got: {}", r.text);
     }
 
     #[test]
     fn keeps_epoch_micros_precision() {
-        let r = normalize("ts=1749031888.115983 ok", false, true);
+        let r = normalize("ts=1749031888.115983 ok", false, true, true);
         assert!(r.text.contains("1749031888.115983"), "got: {}", r.text);
     }
 
     #[test]
     fn trims_iso_timestamp_subseconds_by_default() {
-        let r = normalize("2026-06-04T10:11:28.115983Z ok", false, true);
+        let r = normalize("2026-06-04T10:11:28.115983Z ok", false, true, true);
         assert!(r.text.contains("28.115Z"), "got: {}", r.text);
         assert!(!r.text.contains("115983"), "got: {}", r.text);
     }
 
     #[test]
     fn exact_timestamps_keeps_full_precision() {
-        let r = normalize("2026-06-04T10:11:28.115983Z ok", false, false);
+        let r = normalize("2026-06-04T10:11:28.115983Z ok", false, false, true);
         assert!(r.text.contains("28.115983Z"), "got: {}", r.text);
+    }
+
+    #[test]
+    fn lossless_keeps_whitespace() {
+        // Lossless-режим обязан сохранять выравнивание (loguru-трейсбэки: │   └)
+        let r = normalize("│   └ raise ValueError", false, false, false);
+        assert!(r.text.contains("│   └"), "got: {}", r.text);
+    }
+
+    #[test]
+    fn lossy_mode_collapses_whitespace() {
+        let r = normalize("a    b", false, true, true);
+        assert_eq!(r.text, "a b");
     }
 }

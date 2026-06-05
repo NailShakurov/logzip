@@ -59,6 +59,11 @@ fn find_templates(lines: &[&str]) -> Vec<Template> {
         if tokens.len() < 2 || tokens.len() > 20 {
             continue;
         }
+        // Шаблон восстанавливается через join(" ") — строки с нестандартными
+        // пробелами (отступы, табы) шаблонизировать нельзя, иначе roundtrip их теряет.
+        if *line != tokens.join(" ") {
+            continue;
+        }
         for pos in 0..tokens.len() {
             let val = tokens[pos];
             // Skip values with special chars
@@ -154,4 +159,24 @@ pub fn reverse_templates(lines: &[&str], templates: &[Template]) -> Vec<String> 
             line.to_string()
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn multispace_lines_are_not_templated() {
+        // Строки с отступами невосстановимы из join(" ") — roundtrip обязан их сохранить.
+        let lines: Vec<&str> = vec![
+            "│   └ raise ValueError",
+            "│   └ raise TypeError",
+            "│   └ raise KeyError",
+            "│   └ raise OSError",
+        ];
+        let (new_lines, templates) = extract_templates(&lines);
+        assert!(templates.is_empty());
+        let restored_refs: Vec<&str> = new_lines.iter().map(|s| s.as_str()).collect();
+        assert_eq!(reverse_templates(&restored_refs, &templates), lines);
+    }
 }

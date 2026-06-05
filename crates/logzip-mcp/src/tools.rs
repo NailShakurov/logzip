@@ -13,9 +13,10 @@ pub fn compress_content(args: &Value) -> Result<Value, RpcError> {
     let content = args["content"].as_str()
         .ok_or_else(|| RpcError { code: -32602, message: "Missing required argument: content".into() })?;
     let quality = args["quality"].as_str().unwrap_or("balanced");
+    let lossless = args["lossless"].as_bool().unwrap_or(false);
     let preserve = logzip_core::PreserveConfig { preserve_ids: true, extra_patterns: vec![] };
     let (max_legend, bpe_passes) = quality_params(quality);
-    let result = logzip_core::compress(content, 2, max_legend, true, None, true, bpe_passes, Some(&preserve), false);
+    let result = logzip_core::compress(content, 2, max_legend, true, None, true, bpe_passes, Some(&preserve), false, lossless);
     Ok(content_text(result.render(true)))
 }
 
@@ -29,7 +30,8 @@ pub fn list() -> Result<Value, RpcError> {
                     "type": "object",
                     "properties": {
                         "content": { "type": "string", "description": "Log text to compress" },
-                        "quality": { "type": "string", "enum": ["fast", "balanced", "max"], "default": "balanced" }
+                        "quality": { "type": "string", "enum": ["fast", "balanced", "max"], "default": "balanced" },
+                        "lossless": { "type": "boolean", "default": false, "description": "Byte-exact roundtrip: keep sub-second timestamp precision and whitespace alignment. Default is lossy semantic compression." }
                     },
                     "required": ["content"]
                 }
@@ -42,6 +44,7 @@ pub fn list() -> Result<Value, RpcError> {
                     "properties": {
                         "path":             { "type": "string", "description": "Absolute path to the log file" },
                         "quality":          { "type": "string", "enum": ["fast", "balanced", "max"], "default": "balanced" },
+                        "lossless":         { "type": "boolean", "default": false, "description": "Byte-exact roundtrip: keep sub-second timestamp precision and whitespace alignment. Default is lossy semantic compression." },
                         "preserve_patterns": {
                             "type": "array", "items": { "type": "string" },
                             "description": "Extra regex patterns to keep in body (e.g. REQ-\\d+-\\w+). Use strict anchors ^ and $."
@@ -59,6 +62,7 @@ pub fn list() -> Result<Value, RpcError> {
                         "path":             { "type": "string", "description": "Absolute path to the log file" },
                         "lines":            { "type": "integer", "minimum": 1, "default": 500, "description": "Number of tail lines to compress" },
                         "quality":          { "type": "string", "enum": ["fast", "balanced", "max"], "default": "balanced" },
+                        "lossless":         { "type": "boolean", "default": false, "description": "Byte-exact roundtrip: keep sub-second timestamp precision and whitespace alignment. Default is lossy semantic compression." },
                         "preserve_patterns": {
                             "type": "array", "items": { "type": "string" },
                             "description": "Extra regex patterns to keep in body (e.g. REQ-\\d+-\\w+). Use strict anchors ^ and $."
@@ -105,15 +109,17 @@ pub fn call(params: Option<&Value>, sandbox: &Sandbox) -> Result<Value, RpcError
         .unwrap_or_default();
     let preserve = logzip_core::PreserveConfig { preserve_ids: true, extra_patterns };
 
+    let lossless = args["lossless"].as_bool().unwrap_or(false);
+
     match name {
         "compress_file" => {
             let quality = args["quality"].as_str().unwrap_or("balanced");
-            compress_file_impl(&path, quality, &preserve).map_err(|e| RpcError { code: -32603, message: e })
+            compress_file_impl(&path, quality, &preserve, lossless).map_err(|e| RpcError { code: -32603, message: e })
         }
         "compress_tail" => {
             let lines = args["lines"].as_u64().unwrap_or(500) as usize;
             let quality = args["quality"].as_str().unwrap_or("balanced");
-            compress_tail_impl(&path, lines, quality, &preserve).map_err(|e| RpcError { code: -32603, message: e })
+            compress_tail_impl(&path, lines, quality, &preserve, lossless).map_err(|e| RpcError { code: -32603, message: e })
         }
         "get_stats" => {
             get_stats_impl(&path).map_err(|e| RpcError { code: -32603, message: e })
@@ -127,7 +133,7 @@ pub fn compress_tail_internal(path: &Path, lines: usize, quality: &str) -> Resul
         .map_err(|e| RpcError { code: -32603, message: format!("Cannot read tail: {}", e) })?;
     let (max_legend, bpe_passes) = quality_params(quality);
     let preserve = logzip_core::PreserveConfig { preserve_ids: true, extra_patterns: vec![] };
-    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes, Some(&preserve), false);
+    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes, Some(&preserve), false, false);
     Ok(result.render(true))
 }
 
@@ -145,20 +151,20 @@ fn quality_params(quality: &str) -> (usize, usize) {
     }
 }
 
-fn compress_file_impl(path: &Path, quality: &str, preserve: &logzip_core::PreserveConfig) -> Result<Value, String> {
+fn compress_file_impl(path: &Path, quality: &str, preserve: &logzip_core::PreserveConfig, lossless: bool) -> Result<Value, String> {
     let text = std::fs::read_to_string(path)
         .map_err(|e| format!("Cannot read file: {}", e))?;
     let (max_legend, bpe_passes) = quality_params(quality);
-    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes, Some(preserve), false);
+    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes, Some(preserve), false, lossless);
     log_preserved(&result);
     Ok(content_text(result.render(true)))
 }
 
-fn compress_tail_impl(path: &Path, lines: usize, quality: &str, preserve: &logzip_core::PreserveConfig) -> Result<Value, String> {
+fn compress_tail_impl(path: &Path, lines: usize, quality: &str, preserve: &logzip_core::PreserveConfig, lossless: bool) -> Result<Value, String> {
     let text = read_tail(path, lines)
         .map_err(|e| format!("Cannot read file tail: {}", e))?;
     let (max_legend, bpe_passes) = quality_params(quality);
-    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes, Some(preserve), false);
+    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, bpe_passes, Some(preserve), false, lossless);
     log_preserved(&result);
     Ok(content_text(result.render(true)))
 }
@@ -189,7 +195,7 @@ fn get_stats_impl(path: &Path) -> Result<Value, String> {
     let mut f = std::fs::File::open(path).map_err(|e| e.to_string())?;
     f.read(&mut sample_buf).map_err(|e| e.to_string())?;
     let sample_str = String::from_utf8_lossy(&sample_buf);
-    let mini = logzip_core::compress(&sample_str, 1, 1, false, None, false, 1, None, false);
+    let mini = logzip_core::compress(&sample_str, 1, 1, false, None, false, 1, None, false, false);
     let detected_profile = mini.detected_profile;
 
     let recommended_tool = if estimated_tokens > 50_000 {
@@ -271,7 +277,7 @@ mod tests {
     fn test_compress_file_returns_content_array() {
         let tmp = env::temp_dir().join("logzip_tools_test_cf.log");
         fs::write(&tmp, sample_log(50)).unwrap();
-        let result = compress_file_impl(&tmp, "fast", &default_preserve()).unwrap();
+        let result = compress_file_impl(&tmp, "fast", &default_preserve(), false).unwrap();
         assert!(result["content"].is_array());
         assert_eq!(result["content"][0]["type"], "text");
         let text = result["content"][0]["text"].as_str().unwrap();
@@ -283,7 +289,7 @@ mod tests {
     fn test_compress_tail_returns_last_n_lines() {
         let tmp = env::temp_dir().join("logzip_tools_test_ct.log");
         fs::write(&tmp, sample_log(200)).unwrap();
-        let result = compress_tail_impl(&tmp, 10, "fast", &default_preserve()).unwrap();
+        let result = compress_tail_impl(&tmp, 10, "fast", &default_preserve(), false).unwrap();
         let text = result["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("BODY"));
         fs::remove_file(tmp).unwrap();
@@ -310,7 +316,7 @@ mod tests {
         let tmp = env::temp_dir().join("logzip_preserve_ip_test.log");
         fs::write(&tmp, &log).unwrap();
         let preserve = logzip_core::PreserveConfig { preserve_ids: true, extra_patterns: vec![] };
-        let result = compress_file_impl(&tmp, "balanced", &preserve).unwrap();
+        let result = compress_file_impl(&tmp, "balanced", &preserve, false).unwrap();
         let text = result["content"][0]["text"].as_str().unwrap();
         // IP must not appear as a legend value (would be "= 192.168.1.100")
         assert!(!text.contains("= 192.168.1.100"), "IP should not be a legend entry");
@@ -330,9 +336,22 @@ mod tests {
             preserve_ids: false,
             extra_patterns: vec![r"^REQ-\d+-XYZ$".to_string()],
         };
-        let result = compress_file_impl(&tmp, "balanced", &preserve).unwrap();
+        let result = compress_file_impl(&tmp, "balanced", &preserve, false).unwrap();
         let text = result["content"][0]["text"].as_str().unwrap();
         assert!(!text.contains("= REQ-"), "custom pattern should not be a legend entry");
+        fs::remove_file(tmp).unwrap();
+    }
+
+    #[test]
+    fn test_lossless_keeps_micros_and_indentation() {
+        let log = "2026-06-04T12:28:28.115983Z ERROR boom\n│   └ raise ValueError\n";
+        let tmp = env::temp_dir().join("logzip_tools_test_lossless.log");
+        fs::write(&tmp, log).unwrap();
+        let result = compress_file_impl(&tmp, "balanced", &default_preserve(), true).unwrap();
+        let text = result["content"][0]["text"].as_str().unwrap();
+        let restored = logzip_core::decompress(text).unwrap();
+        assert!(restored.contains("28.115983Z"), "micros lost: {restored}");
+        assert!(restored.contains("│   └"), "indentation lost: {restored}");
         fs::remove_file(tmp).unwrap();
     }
 

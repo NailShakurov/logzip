@@ -50,6 +50,8 @@ pub struct CompressResult {
     pub common_prefix: String,
     pub detected_profile: String,
     pub stats: HashMap<String, String>,
+    /// Исходный текст заканчивался на '\n' — render/decompress восстанавливают его.
+    pub trailing_newline: bool,
 }
 
 pub fn compress(
@@ -62,6 +64,7 @@ pub fn compress(
     bpe_passes: usize,
     preserve: Option<&PreserveConfig>,
     exact_timestamps: bool,
+    lossless: bool,
 ) -> CompressResult {
     let original_len = text.len();
 
@@ -77,7 +80,8 @@ pub fn compress(
     // 2. Normalize
     let mut common_prefix = String::new();
     if do_normalize {
-        let norm = normalizer::normalize(&working, true, !exact_timestamps);
+        // lossless подразумевает exact_timestamps и отключает схлопывание whitespace
+        let norm = normalizer::normalize(&working, true, !(exact_timestamps || lossless), !lossless);
         working = norm.text;
         common_prefix = norm.common_prefix;
     }
@@ -163,6 +167,7 @@ pub fn compress(
         common_prefix,
         detected_profile,
         stats,
+        trailing_newline: text.ends_with('\n'),
     }
 }
 
@@ -307,7 +312,7 @@ pub fn decompress(rendered: &str) -> Result<String, String> {
         ac.replace_all(&body, &flat_refs)
     };
 
-    Ok(if prefix.is_empty() {
+    let mut out = if prefix.is_empty() {
         expanded
     } else {
         expanded
@@ -315,7 +320,12 @@ pub fn decompress(rendered: &str) -> Result<String, String> {
             .map(|l| format!("{prefix}{l}"))
             .collect::<Vec<_>>()
             .join("\n")
-    })
+    };
+    // rendered.lines() съедает финальный '\n' — восстанавливаем по самому rendered
+    if rendered.ends_with('\n') && !out.ends_with('\n') {
+        out.push('\n');
+    }
+    Ok(out)
 }
 
 impl CompressResult {
@@ -338,6 +348,50 @@ impl CompressResult {
         }
         parts.push("--- BODY ---".to_string());
         parts.push(self.body.clone());
-        parts.join("\n")
+        let mut out = parts.join("\n");
+        if self.trailing_newline {
+            out.push('\n');
+        }
+        out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lossless_roundtrip_preserves_timestamps_and_whitespace() {
+        let original = "2026-06-04T12:28:28.115983Z ERROR boom\n\
+                        │   └ raise ValueError\n\
+                        │       └ deeper\n\
+                        2026-06-04T12:28:29.225984Z INFO eventTime=2026-06-04T12:28:29.225984Z ok";
+        let result = compress(original, 2, 128, true, None, true, 1, None, false, true);
+        let restored = decompress(&result.render(false)).unwrap();
+        assert_eq!(restored, original);
+    }
+
+    #[test]
+    fn roundtrip_preserves_trailing_newline() {
+        for lossless in [false, true] {
+            let original = "alpha beta\ngamma delta\n";
+            let result = compress(original, 2, 128, true, None, true, 1, None, false, lossless);
+            let restored = decompress(&result.render(false)).unwrap();
+            assert_eq!(restored, original, "lossless={lossless}");
+
+            let no_nl = "alpha beta\ngamma delta";
+            let result = compress(no_nl, 2, 128, true, None, true, 1, None, false, lossless);
+            let restored = decompress(&result.render(false)).unwrap();
+            assert_eq!(restored, no_nl, "lossless={lossless}");
+        }
+    }
+
+    #[test]
+    fn default_mode_trims_iso_subseconds() {
+        let original = "2026-06-04T12:28:28.115983Z ok\n2026-06-04T12:28:29.225984Z ok";
+        let result = compress(original, 2, 128, true, None, true, 1, None, false, false);
+        let restored = decompress(&result.render(false)).unwrap();
+        assert!(restored.contains("28.115Z"), "got: {restored}");
+        assert!(!restored.contains("115983"), "got: {restored}");
     }
 }
