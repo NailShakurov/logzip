@@ -7,7 +7,7 @@
 - **Context limit**: a 10 MB log is ~2.5M tokens. logzip cuts repeating lines into a legend (`#0# = ...`) so the same information fits in a fraction of the tokens.
 - **Signal over noise**: anomalies and unique lines stay uncompressed in the BODY — errors stand out instead of drowning in identical INFO lines.
 - **LLM-readable output**: unlike gzip/zstd binary, the output is plain text (PREFIX / LEGEND / BODY sections) that any model can decode by following the preamble rules.
-- **Lossless where it matters**: latency/time fields and other plain numbers are never truncated; `--exact-timestamps` keeps full sub-second timestamp precision for byte-accurate roundtrips.
+- **Lossless where it matters**: latency/time fields and other plain numbers are never truncated. Compression is lossy-semantic by default (sub-second timestamps trimmed, whitespace collapsed); `--exact-timestamps` keeps full timestamp precision, `--lossless` guarantees a byte-exact roundtrip (timestamps + whitespace/indentation + trailing newline).
 
 ## Install
 
@@ -21,7 +21,7 @@ logzip compress -i app.log -o app.lz --quality balanced --bpe-passes 2   # recom
 logzip decompress -i app.lz -o app.log
 ```
 
-Key flags: `--quality fast|balanced|max`, `--bpe-passes N`, `--preamble` (LLM decode instructions), `--stats`, `--preserve-ids`, `--preserve-pattern <regex>` (repeatable), `--exact-timestamps` (full sub-second timestamp precision), `--profile journalctl|docker|uvicorn|nodejs|plain` (Python CLI; otherwise auto-detected).
+Key flags: `--quality fast|balanced|max`, `--bpe-passes N`, `--preamble` (LLM decode instructions), `--stats`, `--preserve-ids`, `--preserve-pattern <regex>` (repeatable), `--exact-timestamps` (full sub-second timestamp precision), `--lossless` (byte-exact roundtrip), `--profile journalctl|docker|uvicorn|nodejs|plain` (Python CLI; otherwise auto-detected).
 
 ## Python API
 
@@ -33,7 +33,7 @@ print(result.render(with_preamble=True))   # → send to LLM
 original = decompress(result.render())
 ```
 
-Kwargs: `max_legend_entries`, `bpe_passes`, `do_normalize`, `do_templates`, `profile`, `preserve_ids`, `preserve_patterns`, `exact_timestamps`.
+Kwargs: `max_legend_entries`, `bpe_passes`, `do_normalize`, `do_templates`, `profile`, `preserve_ids`, `preserve_patterns`, `exact_timestamps`, `lossless`.
 
 ## MCP Server (local, stdio)
 
@@ -43,9 +43,9 @@ claude mcp add logzip -- logzip mcp --allow-dir /var/log
 
 Tools:
 1. `get_stats(path)` — file size, token estimate, detected profile. Call first to decide strategy.
-2. `compress_content(content, quality)` — compress log text pasted into the conversation.
-3. `compress_file(path, quality)` — compress an entire file (< 200K tokens).
-4. `compress_tail(path, lines, quality)` — compress the last N lines; efficient for large files.
+2. `compress_content(content, quality, lossless)` — compress log text pasted into the conversation.
+3. `compress_file(path, quality, lossless)` — compress an entire file (< 200K tokens).
+4. `compress_tail(path, lines, quality, lossless)` — compress the last N lines; efficient for large files.
 
 Prompt: `analyze_logs` — compresses the log server-side and prepares an SRE analysis context.
 
@@ -63,7 +63,7 @@ Installs the `log-analysis` skill: mentioning a log file is enough — Claude ca
 ## How compression works (6 stages)
 
 1. Profile detection (journalctl/docker/uvicorn/nodejs/plain)
-2. Normalization (ANSI strip, sub-second timestamp trim — disable with `--exact-timestamps`, hex leading zeros, common prefix extraction)
+2. Normalization (ANSI strip, sub-second timestamp trim — disable with `--exact-timestamps`, whitespace collapse — disable with `--lossless`, hex leading zeros, common prefix extraction)
 3. Parallel frequency analysis (rayon n-grams)
 4. Greedy legend selection (O(N log N), positional indexing)
 5. Substitution + recursive BPE meta-passes (`--bpe-passes`)

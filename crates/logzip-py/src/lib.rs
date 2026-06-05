@@ -151,6 +151,6 @@ fn _logzip(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compress_log, m)?)?;
     m.add_function(wrap_pyfunction!(decompress_log, m)?)?;
     m.add_class::<PyCompressResult>()?;
-    m.add("__version__", "2.1.3")?;
+    m.add("__version__", "2.2.0")?;
     Ok(())
 }

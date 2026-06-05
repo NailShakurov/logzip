@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0] - 2026-06-05
+
+### Added
+- `--lossless` flag (Rust + Python CLI), `lossless=False` kwarg (Python API), `lossless` parameter in MCP tools (`compress_content`/`compress_file`/`compress_tail`): byte-exact roundtrip — full sub-second timestamp precision + preserved whitespace/indentation. Default stays lossy-semantic; `--exact-timestamps` remains the narrow timestamp-only switch.
+- `normalize()` now takes two independent gates (`trim_timestamps`, `collapse_ws`) instead of one.
+
+### Fixed
+- Template extraction destroyed whitespace runs even in lossless mode (signatures rebuilt via `join(" ")`): lines not reconstructible from single-spaced tokens are no longer templated.
+- Trailing newline now survives the roundtrip (`render()` emits it, `decompress()` restores it) — previously `lines()`/`join` silently dropped it in every mode.
+
+### Tests
+- +2 Rust (templates whitespace guard, trailing-newline roundtrip both modes), lossless roundtrip tests in core and MCP, +1 pytest (`test_lossless_roundtrip_byte_exact`). Total: 28 Rust + 18 pytest.
+
+---
+
 ## [2.1.3] - 2026-06-04
 
 ### Fixed

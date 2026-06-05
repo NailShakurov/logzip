@@ -36,6 +36,8 @@ INFO: 127.0.0.1:
 Typical savings: **52–58%** on structured logs (systemd, uvicorn, docker).  
 Anomalies and unique lines stay uncompressed — visible at a glance in the BODY.
 
+Compression is **lossy-semantic by default** (sub-second timestamps trimmed, whitespace collapsed — meaning preserved). Use `--lossless` for a byte-exact roundtrip.
+
 ### Why use logzip? (RAG & LLM)
 
 When working with logs in LLMs (Claude, GPT, RAG systems), you face two problems:
@@ -130,6 +132,9 @@ logzip compress --stats -i app.log -o app.logzip
 # lossless timestamps: keep full sub-second precision (default trims to milliseconds)
 logzip compress --exact-timestamps -i app.log -o app.logzip
 
+# byte-exact roundtrip: exact timestamps + preserved whitespace/indentation
+logzip compress --lossless -i app.log -o app.logzip
+
 # decompress
 logzip decompress -i app.logzip
 ```
@@ -160,6 +165,7 @@ result = compress(
     do_normalize=True,        # collapse timestamps, ANSI, IPs
     do_templates=True,        # structural template extraction
     exact_timestamps=False,   # True → keep full sub-second timestamp precision
+    lossless=False,           # True → byte-exact roundtrip (exact timestamps + whitespace)
 )
 
 # decompress
