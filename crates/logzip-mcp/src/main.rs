@@ -62,8 +62,13 @@ fn cmd_compress(args: &[String]) {
         i += 1;
     }
 
+    // --quality max без явного --bpe-passes → авто-поиск по сетке (legend, passes),
+    // возвращаем наименьший выход. С явным --bpe-passes max — одна конфигурация.
+    const MAX_GRID: &[(usize, usize)] = &[(96, 2), (128, 2), (128, 3), (160, 3)];
+    let auto_search = quality == "max" && bpe_passes.is_none();
+
     let (max_legend, mut passes) = match quality {
-        "max"      => (512usize, 2usize),
+        "max"      => (128usize, 2usize),
         "balanced" => (128, 1),
         _          => (32, 1),
     };
@@ -85,7 +90,11 @@ fn cmd_compress(args: &[String]) {
     let preserve_cfg = (preserve_ids || !preserve_patterns.is_empty()).then(|| {
         logzip_core::PreserveConfig { preserve_ids, extra_patterns: preserve_patterns }
     });
-    let result = logzip_core::compress(&text, 2, max_legend, true, None, true, passes, preserve_cfg.as_ref(), exact_timestamps, lossless);
+    let result = if auto_search {
+        logzip_core::compress_best(&text, 2, MAX_GRID, true, None, true, preserve_cfg.as_ref(), exact_timestamps, lossless, preamble)
+    } else {
+        logzip_core::compress(&text, 2, max_legend, true, None, true, passes, preserve_cfg.as_ref(), exact_timestamps, lossless)
+    };
     let output = result.render(preamble);
 
     match output_path {

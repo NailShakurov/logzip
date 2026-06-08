@@ -59,11 +59,11 @@ Benchmarked on a real 7.96 MB production log.
 | **fast** | `--quality fast` | ~200 | ~4,900 | ~40% | text/LLM |
 | **balanced** | `--quality balanced` | 404 | 3,928 | 52% | text/LLM |
 | **balanced + 2 passes** ★ | `--quality balanced --bpe-passes 2` | 418 | 3,404 | **58%** | text/LLM |
-| **max** | `--quality max` | 507 | 3,511 | 57% | text/LLM |
+| **max** | `--quality max` | ~1,600 | ≤ 3,404 | **≥ 58%** | text/LLM |
 
-★ **Recommended.** A second compression pass finds repeated token sequences in already-compressed text — 14 ms overhead, 7% more savings vs `balanced`.
+★ **Recommended default.** A second compression pass finds repeated token sequences in already-compressed text — 14 ms overhead, 7% more savings vs `balanced`.
 
-`--quality max` uses a larger legend (512 vs 128 entries) which adds overhead without a second pass benefit. Use `--bpe-passes 2` with `balanced` instead.
+`--quality max` runs an auto-search over several `(legend, passes)` configurations and returns the smallest output. It includes `(128, 2)` — the recommended config — in its grid, so it can never lose to `balanced --bpe-passes 2`, but it costs ~4× the time. Use it when you want the best ratio and runtime doesn't matter; otherwise stick with the recommended default. An explicit `--bpe-passes N` disables the search and pins a single config.
 
 ### vs. binary compressors (for context)
 

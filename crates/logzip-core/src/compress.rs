@@ -171,6 +171,35 @@ pub fn compress(
     }
 }
 
+/// Compress `text` once per `(max_legend_entries, bpe_passes)` in `configs` and
+/// return the result whose rendered output (with `with_preamble`) is smallest.
+/// Backs `--quality max`: real best ratio instead of guessing one config.
+/// `configs` must be non-empty; the remaining params mirror [`compress`].
+#[allow(clippy::too_many_arguments)]
+pub fn compress_best(
+    text: &str,
+    max_ngram: usize,
+    configs: &[(usize, usize)],
+    do_normalize: bool,
+    profile: Option<&str>,
+    do_templates: bool,
+    preserve: Option<&PreserveConfig>,
+    exact_timestamps: bool,
+    lossless: bool,
+    with_preamble: bool,
+) -> CompressResult {
+    configs
+        .iter()
+        .map(|&(max_legend, passes)| {
+            compress(
+                text, max_ngram, max_legend, do_normalize, profile, do_templates, passes,
+                preserve, exact_timestamps, lossless,
+            )
+        })
+        .min_by_key(|r| r.render(with_preamble).len())
+        .expect("compress_best: configs must be non-empty")
+}
+
 // ─── flatten_legend: DFS с мемоизацией ───────────────────────────────────────
 
 use aho_corasick::{AhoCorasick, MatchKind};
@@ -384,6 +413,32 @@ mod tests {
             let restored = decompress(&result.render(false)).unwrap();
             assert_eq!(restored, no_nl, "lossless={lossless}");
         }
+    }
+
+    #[test]
+    fn compress_best_picks_smallest_and_roundtrips() {
+        // Repetitive log so legend/passes choices produce measurably different sizes.
+        let mut original = String::new();
+        for i in 0..200 {
+            original.push_str(&format!(
+                "2026-06-04T12:28:{:02}.000Z INFO request handled status=200 latency=12ms path=/api/v1/users\n",
+                i % 60
+            ));
+        }
+        let grid: &[(usize, usize)] = &[(96, 2), (128, 2), (128, 3), (160, 3)];
+        let best = compress_best(&original, 2, grid, true, None, true, None, false, false, false);
+
+        // Best must be no larger than any single config in the grid.
+        let best_len = best.render(false).len();
+        for &(legend, passes) in grid {
+            let single = compress(&original, 2, legend, true, None, true, passes, None, false, false);
+            assert!(
+                best_len <= single.render(false).len(),
+                "best {best_len} > config ({legend},{passes})"
+            );
+        }
+        // And still a valid roundtrip.
+        assert_eq!(decompress(&best.render(false)).unwrap(), original);
     }
 
     #[test]

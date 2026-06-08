@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- `--quality max` now runs an auto-search over a `(legend, passes)` grid (`[(96,2),(128,2),(128,3),(160,3)]`) and returns the smallest rendered output, instead of a single fixed `(512, 2)` config. The old preset enlarged the legend past the point of diminishing returns and lost to `balanced --bpe-passes 2` on both size and time; the grid includes `(128, 2)`, so `max` can never lose to the recommended default. Costs ~4× the time. An explicit `--bpe-passes N` disables the search and pins one config.
+
+### Added
+- `compress_best()` in `logzip-core`: compresses `text` once per config and returns the result with the smallest rendered output.
+
+### Tests
+- +1 Rust (`compress_best_picks_smallest_and_roundtrips`). Total: 29 Rust + 18 pytest.
+
+---
+
 ## [2.2.0] - 2026-06-05
 
 ### Added
